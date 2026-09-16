@@ -1,0 +1,121 @@
+import type { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes, TextareaHTMLAttributes } from 'react'
+
+const cx = (...parts: (string | false | undefined)[]) => parts.filter(Boolean).join(' ')
+
+/** Основная кнопка на всю ширину — градиентная пилюля с макетов. */
+export function Button (
+  { children, variant = 'primary', className, ...rest }:
+  ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'ghost' | 'quiet' },
+) {
+  const styles = {
+    primary: 'btn-primary text-white',
+    ghost: 'bg-surface-2 text-white',
+    quiet: 'text-muted',
+  }[variant]
+
+  return (
+    <button
+      {...rest}
+      className={cx(
+        'w-full rounded-[22px] py-4 text-[17px] font-semibold transition active:scale-[0.98]',
+        'disabled:opacity-40 disabled:active:scale-100',
+        styles, className,
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
+export function Field ({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...rest}
+      className={cx(
+        'w-full rounded-field bg-field px-5 py-4 text-[17px] text-white',
+        'placeholder:text-muted outline-none focus:ring-2 focus:ring-accent/60',
+        className,
+      )}
+    />
+  )
+}
+
+export function TextArea ({ className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
+      {...rest}
+      className={cx(
+        'w-full resize-none rounded-field bg-field px-5 py-4 text-[17px] text-white',
+        'placeholder:text-muted outline-none focus:ring-2 focus:ring-accent/60',
+        className,
+      )}
+    />
+  )
+}
+
+/** Небольшая плашка: категория, статус, награда. */
+export function Chip (
+  { children, tone = 'plain', className }:
+  { children: ReactNode; tone?: 'plain' | 'accent' | 'success'; className?: string },
+) {
+  const styles = {
+    plain: 'bg-chip text-white',
+    accent: 'bg-accent text-white',
+    success: 'bg-success/20 text-success',
+  }[tone]
+
+  return (
+    <span className={cx(
+      'whitespace-nowrap rounded-full px-3.5 py-2 text-[15px] font-semibold', styles, className,
+    )}>
+      {children}
+    </span>
+  )
+}
+
+export function Card ({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cx('rounded-card bg-surface-2 p-4', className)}>{children}</div>
+}
+
+/** Аватар: фотография, а при её отсутствии — первая буква имени. */
+export function Avatar (
+  { name, src, size = 44, className }:
+  { name: string; src?: string; size?: number; className?: string },
+) {
+  const style = { width: size, height: size }
+  // Свой radius в className должен побеждать круглую форму по умолчанию.
+  const shape = className?.includes('rounded') ? '' : 'rounded-full'
+
+  if (src) {
+    return (
+      <img
+        src={src} alt={name} style={style}
+        className={cx('shrink-0 object-cover', shape, className)}
+      />
+    )
+  }
+
+  return (
+    <span
+      style={{ ...style, fontSize: size * 0.42 }}
+      className={cx(
+        'grid shrink-0 place-items-center bg-accent/70 font-semibold text-white',
+        shape || 'rounded-full', className,
+      )}
+    >
+      {name.charAt(0).toUpperCase()}
+    </span>
+  )
+}
+
+/** Полоса прогресса: фиолетовая заливка на белом, как в макетах. */
+export function Progress ({ value, className }: { value: number; className?: string }) {
+  return (
+    <div className={cx('h-3 w-full overflow-hidden rounded-full bg-white', className)}>
+      <div
+        className="h-full rounded-full bg-accent transition-[width] duration-500"
+        style={{ width: `${Math.min(100, Math.max(0, value * 100))}%` }}
+      />
+    </div>
+  )
+}

@@ -1,11 +1,45 @@
-export default function App() {
+import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { PhoneFrame } from './components/Layout'
+import Splash from './screens/Splash'
+import Onboarding from './screens/Onboarding'
+import Register from './screens/Register'
+import Confirm from './screens/Confirm'
+import Interests from './screens/Interests'
+import Login from './screens/Login'
+import Home from './screens/Home'
+import Events from './screens/Events'
+import MapScreen from './screens/MapScreen'
+import Profile from './screens/Profile'
+import EventDetails from './screens/EventDetails'
+import Chat from './screens/Chat'
+import Quest from './screens/Quest'
+import CreateEvent from './screens/CreateEvent'
+
+export default function App () {
   return (
-    <main className="mx-auto flex h-full max-w-md flex-col items-center justify-center gap-3 px-4 text-center">
-      <div className="grid size-16 place-items-center rounded-2xl bg-accent text-3xl">Q</div>
-      <h1 className="text-2xl font-semibold">Questa</h1>
-      <p className="text-muted">
-        Каркас проекта готов. Экраны собираются по макетам Figma.
-      </p>
-    </main>
+    <HashRouter>
+      <PhoneFrame>
+        <Routes>
+          <Route path="/start"      element={<Splash />} />
+          <Route path="/onboarding" element={<Onboarding />} />
+          <Route path="/register"   element={<Register />} />
+          <Route path="/confirm"    element={<Confirm />} />
+          <Route path="/interests"  element={<Interests />} />
+          <Route path="/login"      element={<Login />} />
+
+          <Route path="/"        element={<Home />} />
+          <Route path="/events"  element={<Events />} />
+          <Route path="/map"     element={<MapScreen />} />
+          <Route path="/profile" element={<Profile />} />
+
+          <Route path="/create"           element={<CreateEvent />} />
+          <Route path="/event/:id"        element={<EventDetails />} />
+          <Route path="/event/:id/chat"   element={<Chat />} />
+          <Route path="/event/:id/quest"  element={<Quest />} />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </PhoneFrame>
+    </HashRouter>
   )
 }

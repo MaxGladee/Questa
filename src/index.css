@@ -1,26 +1,50 @@
 @import "tailwindcss";
 
-/* Палитра и типографика из ЧТЗ 10.2: тёмные фоны, акцент #8769FF, SF Pro.
-   Точные значения будут сверены с макетами Figma. */
+/* Палитра снята пипеткой с экспортов Figma, а не подобрана на глаз.
+   Шрифт — SF Pro (ЧТЗ 10.2): на iPhone его даёт -apple-system, на остальных
+   устройствах подставляется ближайший системный гротеск. */
 @theme {
-  --color-bg:        #0E0E12;
-  --color-surface:   #17171E;
-  --color-elevated:  #1F1F29;
-  --color-border:    #2A2A36;
+  --color-bg:        #0F082C;
+  --color-surface:   #1B1437;
+  --color-surface-2: #221B3D;
+  --color-surface-3: #2B2156;
+  --color-chip:      #272041;
+  --color-field:     #2B2540;
   --color-accent:    #8769FF;
-  --color-accent-soft: #A78FFF;
-  --color-text:      #F5F5F7;
-  --color-muted:     #8E8E99;
+  --color-accent-2:  #6049BC;
+  --color-success:   #00C400;
+  --color-bubble:    #DADADA;
+  --color-text:      #FFFFFF;
+  --color-muted:     #9A93B8;
 
-  --font-sans: -apple-system, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+               "Segoe UI", system-ui, sans-serif;
+
+  --radius-card:  20px;
+  --radius-field: 18px;
 }
 
 html, body, #root { height: 100%; }
 
 body {
   margin: 0;
-  background: var(--color-bg);
+  background: #07041A;              /* поле вокруг телефона на широком экране */
   color: var(--color-text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+/* Заголовки в макетах заметно жирнее обычного bold. */
+h1, h2, h3 { font-weight: 800; letter-spacing: -0.02em; }
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+/* Основная кнопка — вертикальный градиент, как на макетах. */
+@utility btn-primary {
+  background: linear-gradient(180deg, #9B83FF 0%, #7C5CFF 100%);
+  box-shadow: 0 8px 24px -8px rgb(135 105 255 / 0.7);
 }
