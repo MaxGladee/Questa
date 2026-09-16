@@ -2,8 +2,12 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { PlainScreen } from '../components/Layout'
 import { Avatar, Button, Chip } from '../components/ui'
+import { Failed, Loading } from '../components/States'
 import { BackIcon, ChevronIcon, PinIcon, StarIcon } from '../components/icons'
-import { categoryTitle, findEvent, formatDate, formatTime } from '../data/demo'
+import { categoryTitle, formatDate, formatTime } from '../data/demo'
+import { getEvent, joinEvent, leaveEvent, openChat } from '../lib/api'
+import { useAsync } from '../lib/useAsync'
+import { useAuth } from '../lib/auth'
 
 const STATUS_LABEL = {
   active: 'Ожидание',
@@ -19,10 +23,16 @@ const STATUS_LABEL = {
 export default function EventDetails () {
   const { id } = useParams()
   const navigate = useNavigate()
-  const event = findEvent(id)
-  const [role, setRole] = useState(event?.myRole ?? 'guest')
+  const { profile } = useAuth()
   const [joining, setJoining] = useState(false)
+  const [busy, setBusy] = useState(false)
 
+  const { data: event, error, loading, reload } = useAsync(
+    () => getEvent(id!, profile?.id ?? null), [id, profile?.id],
+  )
+
+  if (loading) return <PlainScreen title="Ивент"><Loading /></PlainScreen>
+  if (error) return <PlainScreen title="Ивент"><Failed message={error} onRetry={reload} /></PlainScreen>
   if (!event) {
     return (
       <PlainScreen title="Ивент не найден">
@@ -33,8 +43,19 @@ export default function EventDetails () {
     )
   }
 
-  const organizer = event.participants.find((p) => p.role === 'organizer')
+  const organizer = event.participants.find((person) => person.role === 'organizer')
   const full = event.participants.length >= event.maxParticipants
+
+  async function act (action: () => Promise<void>) {
+    setBusy(true)
+    try {
+      await action()
+      reload()
+    } finally {
+      setBusy(false)
+      setJoining(false)
+    }
+  }
 
   return (
     <PlainScreen
@@ -46,10 +67,10 @@ export default function EventDetails () {
             src={event.coverUrl} alt="" width={698} height={420}
             className="h-56 w-full rounded-[24px] object-cover"
           />
-          {role !== 'guest' && (
+          {event.myRole !== 'guest' && (
             <span className="absolute right-3 top-3 rounded-full bg-green-800/90 px-5 py-2.5
                              text-[16px] font-semibold">
-              {role === 'organizer' ? 'Ты организатор' : 'Ты участвуешь'}
+              {event.myRole === 'organizer' ? 'Ты организатор' : 'Ты участвуешь'}
             </span>
           )}
         </div>
@@ -90,7 +111,7 @@ export default function EventDetails () {
           <div className="mt-3 flex items-center">
             {event.participants.slice(0, 4).map((person, index) => (
               <Avatar
-                key={person.id} name={person.nickname} size={46}
+                key={person.id} name={person.nickname} src={person.avatarUrl} size={46}
                 className={index > 0 ? '-ml-3 ring-2 ring-surface-2' : ''}
               />
             ))}
@@ -103,14 +124,16 @@ export default function EventDetails () {
           </div>
         </div>
 
-        <div className="rounded-card bg-surface-2 p-4">
-          <p className="text-[15px] text-muted">Описание</p>
-          <p className="mt-1 text-[17px] leading-snug">{event.description}</p>
-        </div>
+        {event.description && (
+          <div className="rounded-card bg-surface-2 p-4">
+            <p className="text-[15px] text-muted">Описание</p>
+            <p className="mt-1 text-[17px] leading-snug">{event.description}</p>
+          </div>
+        )}
 
         {organizer && (
           <div className="flex items-center gap-3 rounded-card bg-surface-2 p-4">
-            <Avatar name={organizer.nickname} size={52} />
+            <Avatar name={organizer.nickname} src={organizer.avatarUrl} size={52} />
             <div className="min-w-0 flex-1">
               <p className="truncate text-[18px] font-semibold">{organizer.nickname}</p>
               <p className="flex items-center gap-1.5 text-[16px]">
@@ -122,34 +145,43 @@ export default function EventDetails () {
         )}
 
         {/* Действия зависят от роли — таблица режимов из ЧТЗ 5.6. */}
-        {role === 'guest' ? (
-          <div className="space-y-3">
-            <Button
-              disabled={full}
-              onClick={() => setJoining(true)}
-            >
-              {full ? 'Мест нет' : 'Присоединиться к ивенту'}
-            </Button>
-          </div>
+        {event.myRole === 'guest' ? (
+          <Button disabled={full || busy} onClick={() => setJoining(true)}>
+            {full ? 'Мест нет' : 'Присоединиться к ивенту'}
+          </Button>
         ) : (
           <div className="space-y-3">
-            {event.status === 'in_progress' && event.quest && (
+            {event.status === 'in_progress' && (
               <Button onClick={() => navigate(`/event/${event.id}/quest`)}>
                 Перейти к заданиям
               </Button>
             )}
-            <Button
-              variant={event.status === 'in_progress' ? 'ghost' : 'primary'}
-              onClick={() => navigate(`/event/${event.id}/chat`)}
-            >
-              Открыть чат
-            </Button>
-            <button
-              onClick={() => setRole('guest')}
-              className="w-full py-2 text-center text-[17px] text-muted"
-            >
-              {role === 'organizer' ? 'Отменить ивент' : 'Покинуть ивент'}
-            </button>
+            {event.chatOpened ? (
+              <Button
+                variant={event.status === 'in_progress' ? 'ghost' : 'primary'}
+                onClick={() => navigate(`/event/${event.id}/chat`)}
+              >
+                Открыть чат
+              </Button>
+            ) : event.myRole === 'organizer'
+                && event.participants.length >= event.minParticipants ? (
+              <Button disabled={busy} onClick={() => act(() => openChat(event.id))}>
+                Создать чат
+              </Button>
+            ) : (
+              <p className="rounded-card bg-surface-2 py-4 text-center text-[16px] text-muted">
+                Чат откроется, когда наберётся {event.minParticipants} участника
+              </p>
+            )}
+            {event.myRole === 'participant' && (
+              <button
+                disabled={busy}
+                onClick={() => act(() => leaveEvent(event.id, profile!.id))}
+                className="w-full py-2 text-center text-[17px] text-muted"
+              >
+                Покинуть ивент
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -158,14 +190,26 @@ export default function EventDetails () {
       {joining && (
         <div className="absolute inset-0 z-30 flex items-end bg-black/60 px-4 pb-6">
           <div className="w-full space-y-4 rounded-[28px] bg-surface p-6">
-            <h2 className="text-[22px]">Присоединиться к ивенту?</h2>
-            <p className="text-[17px] leading-snug text-white/80">
-              Чат будет создан после набора минимального количества участников.
+            <h2 className="text-center text-[24px]">Присоединиться к ивенту?</h2>
+
+            <div className="rounded-card bg-surface-2 p-4">
+              <p className="text-[19px] font-bold">{event.title}</p>
+              <p className="mt-1 text-[16px] text-muted">
+                {formatDate(event.startsAt)}, {formatTime(event.startsAt)} · {event.address}
+              </p>
+            </div>
+
+            <p className="text-center text-[16px] leading-snug text-muted">
+              Чат будет создан после набора минимального количества участников
             </p>
-            <Button onClick={() => { setRole('participant'); setJoining(false) }}>
-              Присоединиться
+
+            <Button
+              disabled={busy}
+              onClick={() => act(() => joinEvent(event.id, profile!.id))}
+            >
+              {busy ? 'Занимаем место…' : 'Подтвердить'}
             </Button>
-            <Button variant="quiet" onClick={() => setJoining(false)}>Не сейчас</Button>
+            <Button variant="quiet" onClick={() => setJoining(false)}>Отмена</Button>
           </div>
         </div>
       )}

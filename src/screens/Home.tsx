@@ -3,8 +3,11 @@ import { Link } from 'react-router-dom'
 import { TabScreen } from '../components/Layout'
 import { EventListCard } from '../components/EventCard'
 import { Avatar, Progress } from '../components/ui'
+import { Empty, Failed, Loading } from '../components/States'
 import { BellIcon, ChevronIcon, MicIcon, SearchIcon } from '../components/icons'
-import { EVENTS, ME } from '../data/demo'
+import { useAuth } from '../lib/auth'
+import { getQuest, listEvents } from '../lib/api'
+import { useAsync } from '../lib/useAsync'
 
 /** Горизонтальный календарь на пять дней вперёд (ЧТЗ 5.3, пункт 5). */
 function DateStrip ({ value, onChange }: { value: number; onChange: (day: number) => void }) {
@@ -37,26 +40,47 @@ function DateStrip ({ value, onChange }: { value: number; onChange: (day: number
 }
 
 export default function Home () {
+  const { profile } = useAuth()
   const [day, setDay] = useState(0)
   const [query, setQuery] = useState('')
 
-  // Активный ивент показывается отдельной карточкой наверху (ЧТЗ 5.3, пункт 4).
-  const active = EVENTS.find((event) => event.status === 'in_progress')
-  const done = active?.quest?.tasks.filter((task) => task.completed).length ?? 0
-  const total = active?.quest?.tasks.length ?? 0
-
-  // Рекомендации: чужие ивенты, которые ещё не начались (ЧТЗ 5.3).
-  const recommended = EVENTS.filter(
-    (event) => event.status === 'active'
-      && event.title.toLowerCase().includes(query.trim().toLowerCase()),
+  const { data: events, error, loading, reload } = useAsync(
+    () => listEvents(profile?.id ?? null), [profile?.id],
   )
+
+  // Активный ивент — тот, что уже идёт и в котором пользователь участвует.
+  const active = events?.find(
+    (event) => event.status === 'in_progress' && event.myRole !== 'guest',
+  )
+
+  const { data: quest } = useAsync(
+    () => active ? getQuest(active.id, profile?.id ?? null) : Promise.resolve(null),
+    [active?.id, profile?.id],
+  )
+
+  const done = quest?.quest?.tasks.filter((task) => task.completed).length ?? 0
+  const total = quest?.quest?.tasks.length ?? 0
+
+  // Рекомендации: ивенты, которые ещё не начались и которые пользователь
+  // не создавал и в которые не вступал (ЧТЗ 5.3).
+  const chosenDay = new Date()
+  chosenDay.setDate(chosenDay.getDate() + day)
+
+  const recommended = (events ?? []).filter((event) => {
+    if (event.status !== 'active' || event.myRole !== 'guest') return false
+    if (!event.title.toLowerCase().includes(query.trim().toLowerCase())) return false
+    return new Date(event.startsAt).toDateString() === chosenDay.toDateString() || query.trim() !== ''
+  })
 
   return (
     <TabScreen>
       <div className="space-y-5 px-5 pt-3">
         <header className="flex items-center gap-3">
           <Link to="/profile">
-            <Avatar name={ME.nickname} src={ME.avatarUrl} size={48} className="rounded-2xl" />
+            <Avatar
+              name={profile?.nickname ?? '?'} src={profile?.avatarUrl}
+              size={48} className="rounded-2xl"
+            />
           </Link>
 
           <label className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl bg-surface px-3.5 py-3">
@@ -91,12 +115,14 @@ export default function Home () {
                 </p>
               </div>
             </div>
-            <div className="mt-4 flex items-center gap-3 pl-[88px]">
-              <Progress value={total ? done / total : 0} />
-            </div>
-            <p className="mt-2 pl-[88px] text-[14px] text-muted">
-              {done} из {total} заданий выполнено
-            </p>
+            {total > 0 && (
+              <>
+                <div className="mt-4 pl-[88px]"><Progress value={done / total} /></div>
+                <p className="mt-2 pl-[88px] text-[14px] text-muted">
+                  {done} из {total} заданий выполнено
+                </p>
+              </>
+            )}
           </Link>
         )}
 
@@ -104,10 +130,13 @@ export default function Home () {
 
         <section className="space-y-4">
           <h2 className="text-[28px]">Рекомендации</h2>
-          {recommended.map((event) => <EventListCard key={event.id} event={event} />)}
-          {recommended.length === 0 && (
-            <p className="py-8 text-center text-[17px] text-muted">Ничего не нашлось</p>
+
+          {loading && <Loading />}
+          {error && <Failed message={error} onRetry={reload} />}
+          {!loading && !error && recommended.length === 0 && (
+            <Empty label={query ? 'Ничего не нашлось' : 'На этот день ивентов пока нет'} />
           )}
+          {recommended.map((event) => <EventListCard key={event.id} event={event} />)}
         </section>
       </div>
     </TabScreen>

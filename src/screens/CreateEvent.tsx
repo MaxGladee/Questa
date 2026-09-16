@@ -3,10 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { Button, Field, TextArea } from '../components/ui'
 import { CalendarIcon, CameraIcon, ClockIcon, CloseIcon } from '../components/icons'
 import { CATEGORIES, type CategoryCode } from '../data/demo'
+import { createEvent, geocode } from '../lib/api'
+import { useAuth } from '../lib/auth'
 
 /** Создание ивента (ЧТЗ 5.5). Состав полей и ограничения — из таблицы формы. */
 export default function CreateEvent () {
   const navigate = useNavigate()
+  const { profile } = useAuth()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [address, setAddress] = useState('')
@@ -16,10 +19,11 @@ export default function CreateEvent () {
   const [max, setMax] = useState('')
   const [category, setCategory] = useState<CategoryCode>('party')
   const [chatMode, setChatMode] = useState<'auto' | 'manual'>('auto')
-  const [created, setCreated] = useState(false)
+  const [created, setCreated] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
 
-  function submit () {
+  async function submit () {
     if (title.trim().length < 3) return setError('Название — от 3 до 50 символов')
     if (!address.trim()) return setError('Укажите место встречи')
     if (!date || !time) return setError('Укажите дату и время')
@@ -29,8 +33,37 @@ export default function CreateEvent () {
     if (!(from >= 2 && from <= 10)) return setError('Минимум участников — от 2 до 10')
     if (!(to >= from && to <= 10)) return setError('Максимум не меньше минимума и не больше 10')
 
+    // Дата и время не раньше чем через 30 минут и не позже 7 дней (ЧТЗ 5.5).
+    const startsAt = new Date(`${date}T${time}`)
+    const now = Date.now()
+    if (startsAt.getTime() < now + 30 * 60_000) {
+      return setError('Ивент должен начинаться не раньше чем через 30 минут')
+    }
+    if (startsAt.getTime() > now + 7 * 86_400_000) {
+      return setError('Ивент нельзя назначить дальше чем на неделю вперёд')
+    }
+
     setError('')
-    setCreated(true)
+    setBusy(true)
+    try {
+      const [lat, lng] = await geocode(address.trim())
+      const id = await createEvent({
+        title: title.trim(),
+        description: description.trim(),
+        address: address.trim(),
+        lat, lng,
+        startsAt: startsAt.toISOString(),
+        minParticipants: from,
+        maxParticipants: to,
+        category,
+        chatMode,
+      }, profile!.id)
+      setCreated(id)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось создать ивент')
+    } finally {
+      setBusy(false)
+    }
   }
 
   if (created) {
@@ -42,7 +75,7 @@ export default function CreateEvent () {
           Он появился на карте и в рекомендациях. Квест подберётся к началу встречи.
         </p>
         <div className="mt-4 w-full space-y-3">
-          <Button onClick={() => navigate('/events')}>Открыть ивент</Button>
+          <Button onClick={() => navigate(`/event/${created}`)}>Открыть ивент</Button>
           <Button variant="ghost" onClick={() => navigate('/')}>На главную</Button>
         </div>
       </div>
@@ -176,7 +209,9 @@ export default function CreateEvent () {
 
         {error && <p className="text-[15px] text-red-400">{error}</p>}
 
-        <Button onClick={submit}>Создать ивент</Button>
+        <Button onClick={submit} disabled={busy}>
+          {busy ? 'Создаём…' : 'Создать ивент'}
+        </Button>
       </div>
     </div>
   )

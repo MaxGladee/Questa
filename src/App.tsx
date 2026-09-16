@@ -1,5 +1,9 @@
-import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
+import type { ReactNode } from 'react'
+import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { PhoneFrame } from './components/Layout'
+import { Loading } from './components/States'
+import { AuthProvider, useAuth } from './lib/auth'
+import { isLive } from './lib/supabase'
 import Splash from './screens/Splash'
 import Onboarding from './screens/Onboarding'
 import Register from './screens/Register'
@@ -15,31 +19,55 @@ import Chat from './screens/Chat'
 import Quest from './screens/Quest'
 import CreateEvent from './screens/CreateEvent'
 
+/**
+ * Экраны за входом. Без сессии уводим на приветствие, с сессией но без
+ * заполненного профиля — на шаг создания профиля (ЧТЗ 5.1.1, шаг 5).
+ */
+function RequireAuth ({ children }: { children: ReactNode }) {
+  const { ready, session, profile } = useAuth()
+  const { pathname } = useLocation()
+
+  if (!isLive) return <>{children}</>          // демонстрационный режим без входа
+  if (!ready) return <Loading label="Открываем Questa…" />
+  if (!session) return <Navigate to="/start" replace />
+  if (!profile && pathname !== '/interests') return <Navigate to="/interests" replace />
+
+  return <>{children}</>
+}
+
+function Router () {
+  return (
+    <Routes>
+      <Route path="/start"      element={<Splash />} />
+      <Route path="/onboarding" element={<Onboarding />} />
+      <Route path="/register"   element={<Register />} />
+      <Route path="/confirm"    element={<Confirm />} />
+      <Route path="/login"      element={<Login />} />
+      <Route path="/interests"  element={<Interests />} />
+
+      <Route path="/"        element={<RequireAuth><Home /></RequireAuth>} />
+      <Route path="/events"  element={<RequireAuth><Events /></RequireAuth>} />
+      <Route path="/map"     element={<RequireAuth><MapScreen /></RequireAuth>} />
+      <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
+
+      <Route path="/create"          element={<RequireAuth><CreateEvent /></RequireAuth>} />
+      <Route path="/event/:id"       element={<RequireAuth><EventDetails /></RequireAuth>} />
+      <Route path="/event/:id/chat"  element={<RequireAuth><Chat /></RequireAuth>} />
+      <Route path="/event/:id/quest" element={<RequireAuth><Quest /></RequireAuth>} />
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}
+
 export default function App () {
   return (
     <HashRouter>
-      <PhoneFrame>
-        <Routes>
-          <Route path="/start"      element={<Splash />} />
-          <Route path="/onboarding" element={<Onboarding />} />
-          <Route path="/register"   element={<Register />} />
-          <Route path="/confirm"    element={<Confirm />} />
-          <Route path="/interests"  element={<Interests />} />
-          <Route path="/login"      element={<Login />} />
-
-          <Route path="/"        element={<Home />} />
-          <Route path="/events"  element={<Events />} />
-          <Route path="/map"     element={<MapScreen />} />
-          <Route path="/profile" element={<Profile />} />
-
-          <Route path="/create"           element={<CreateEvent />} />
-          <Route path="/event/:id"        element={<EventDetails />} />
-          <Route path="/event/:id/chat"   element={<Chat />} />
-          <Route path="/event/:id/quest"  element={<Quest />} />
-
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </PhoneFrame>
+      <AuthProvider>
+        <PhoneFrame>
+          <Router />
+        </PhoneFrame>
+      </AuthProvider>
     </HashRouter>
   )
 }

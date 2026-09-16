@@ -3,7 +3,10 @@ import { Link } from 'react-router-dom'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { TabScreen } from '../components/Layout'
-import { CATEGORIES, EVENTS, categoryTitle, formatTime, type CategoryCode } from '../data/demo'
+import { CATEGORIES, categoryTitle, formatTime, type CategoryCode, type QuestaEvent } from '../data/demo'
+import { listEvents } from '../lib/api'
+import { useAsync } from '../lib/useAsync'
+import { useAuth } from '../lib/auth'
 
 // Карта на OpenStreetMap. В ТЗ 11.1 указан MapKit Яндекса — он требует
 // платного ключа и заявки, поэтому в прототипе подключён бесплатный источник
@@ -26,6 +29,9 @@ function marker (emoji: string) {
 }
 
 export default function MapScreen () {
+  const { profile } = useAuth()
+  const { data } = useAsync(() => listEvents(profile?.id ?? null), [profile?.id])
+  const events: QuestaEvent[] = data ?? []
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
@@ -49,7 +55,7 @@ export default function MapScreen () {
     if (!instance) return
 
     const layer = L.layerGroup().addTo(instance)
-    const shown = EVENTS.filter(
+    const shown = events.filter(
       (event) => categories.length === 0 || categories.includes(event.category),
     )
 
@@ -60,13 +66,13 @@ export default function MapScreen () {
     }
 
     return () => { layer.remove() }
-  }, [categories])
+  }, [categories, events])
 
   const toggle = (code: CategoryCode) =>
     setCategories((list) =>
       list.includes(code) ? list.filter((c) => c !== code) : [...list, code])
 
-  const event = EVENTS.find((item) => item.id === selected)
+  const event = events.find((item) => item.id === selected)
 
   return (
     <TabScreen>

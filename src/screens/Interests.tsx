@@ -2,13 +2,32 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button, Field } from '../components/ui'
 import { CATEGORIES, type CategoryCode } from '../data/demo'
+import { useAuth } from '../lib/auth'
 
 /** Никнейм, город и интересы — шаг 5 регистрации (ЧТЗ 5.1.1). */
 export default function Interests () {
   const navigate = useNavigate()
+  const { createProfile } = useAuth()
   const [nickname, setNickname] = useState('')
   const [city, setCity] = useState('')
   const [chosen, setChosen] = useState<CategoryCode[]>([])
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function submit () {
+    setBusy(true)
+    try {
+      await createProfile({ nickname: nickname.trim(), city: city.trim(), interests: chosen })
+      navigate('/')
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : ''
+      setError(message.includes('duplicate') || message.includes('unique')
+        ? 'Такой никнейм уже занят'
+        : 'Не удалось сохранить профиль')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const toggle = (code: CategoryCode) =>
     setChosen((list) => (list.includes(code) ? list.filter((c) => c !== code) : [...list, code]))
@@ -45,9 +64,10 @@ export default function Interests () {
         </div>
       </div>
 
-      <div className="mt-auto">
-        <Button disabled={!nickname || !city || chosen.length === 0} onClick={() => navigate('/')}>
-          Готово
+      <div className="mt-auto space-y-3">
+        {error && <p className="text-[15px] text-red-400">{error}</p>}
+        <Button disabled={busy || !nickname || !city || chosen.length === 0} onClick={submit}>
+          {busy ? 'Сохраняем…' : 'Готово'}
         </Button>
       </div>
     </div>

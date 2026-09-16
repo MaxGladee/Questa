@@ -8,7 +8,7 @@ import type { QuestTask } from '../data/demo'
  * ответы засчитываются каждому отдельно, по 5 QP за верный (ЧТЗ 5.12.1).
  */
 export default function Quiz (
-  { task, onClose, onDone }: { task: QuestTask; onClose: () => void; onDone: () => void },
+  { task, onClose, onDone }: { task: QuestTask; onClose: () => void; onDone: (correct: number) => void },
 ) {
   const questions = task.questions ?? []
   const [index, setIndex] = useState(0)
@@ -40,7 +40,7 @@ export default function Quiz (
           <p className="text-[18px] text-white/80">
             Верных ответов: {correct} из {questions.length}
           </p>
-          <Button className="mt-4" onClick={onDone}>Забрать награду</Button>
+          <Button className="mt-4" onClick={() => onDone(correct)}>Забрать награду</Button>
         </div>
       ) : (
         <>

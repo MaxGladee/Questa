@@ -117,6 +117,18 @@ export const ME: User = {
 
 const art = (file: string) => `${import.meta.env.BASE_URL}art/${file}`
 
+/**
+ * Даты демонстрационных ивентов считаются от сегодняшнего дня, а не записаны
+ * жёстко: иначе через неделю после написания кода демо-режим показывал бы
+ * пустые «Рекомендации».
+ */
+function inDays (days: number, hour: number): string {
+  const date = new Date()
+  date.setDate(date.getDate() + days)
+  date.setHours(hour, 0, 0, 0)
+  return date.toISOString()
+}
+
 const karaokeQuest: Quest = {
   title: 'Караоке-разогрев',
   source: 'ai',
@@ -153,7 +165,7 @@ export const EVENTS: QuestaEvent[] = [
     category: 'party',
     address: 'ул. Малышева, 44',
     lat: 56.8380, lng: 60.5975,
-    startsAt: '2026-05-10T20:00:00+05:00',
+    startsAt: inDays(0, 20),
     minParticipants: 3, maxParticipants: 8,
     status: 'in_progress',
     qpReward: 180,
@@ -176,7 +188,7 @@ export const EVENTS: QuestaEvent[] = [
     category: 'walk',
     address: 'ЦПКИО им. Маяковского',
     lat: 56.8106, lng: 60.6431,
-    startsAt: '2026-05-01T09:00:00+05:00',
+    startsAt: inDays(1, 9),
     minParticipants: 3, maxParticipants: 10,
     status: 'active',
     qpReward: 180,
@@ -196,7 +208,7 @@ export const EVENTS: QuestaEvent[] = [
     category: 'boardgames',
     address: 'ул. Розы Люксембург, 54А',
     lat: 56.8255, lng: 60.6112,
-    startsAt: '2026-05-10T18:00:00+05:00',
+    startsAt: inDays(0, 18),
     minParticipants: 4, maxParticipants: 6,
     status: 'active',
     qpReward: 150,
@@ -215,7 +227,7 @@ export const EVENTS: QuestaEvent[] = [
     category: 'chill',
     address: 'ул. 8 Марта, 12',
     lat: 56.8290, lng: 60.5960,
-    startsAt: '2026-05-10T19:00:00+05:00',
+    startsAt: inDays(2, 19),
     minParticipants: 2, maxParticipants: 6,
     status: 'active',
     qpReward: 120,
@@ -245,18 +257,10 @@ export function categoryTitle (code: CategoryCode): string {
   return CATEGORIES.find((c) => c.code === code)?.title ?? 'Другое'
 }
 
-// Ивенты показываются по времени города, где проходят, а не по часовому поясу
-// устройства: иначе на защите с ноутбука время разъезжается с макетом.
-const TIME_ZONE = 'Asia/Yekaterinburg'
-
 export function formatDate (iso: string): string {
-  return new Date(iso).toLocaleDateString('ru-RU', {
-    day: 'numeric', month: 'long', timeZone: TIME_ZONE,
-  })
+  return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
 }
 
 export function formatTime (iso: string): string {
-  return new Date(iso).toLocaleTimeString('ru-RU', {
-    hour: '2-digit', minute: '2-digit', timeZone: TIME_ZONE,
-  })
+  return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
 }

@@ -1,8 +1,12 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { TabScreen } from '../components/Layout'
 import { Avatar, Progress } from '../components/ui'
+import { Empty, Loading } from '../components/States'
 import { ChevronIcon, GearIcon } from '../components/icons'
-import { EVENTS, ME, levelFromExp, levelProgress } from '../data/demo'
+import { levelFromExp, levelProgress } from '../data/demo'
+import { listEvents } from '../lib/api'
+import { useAsync } from '../lib/useAsync'
+import { useAuth } from '../lib/auth'
 
 function Stat (
   { value, label, badge, tone }:
@@ -28,9 +32,17 @@ function Stat (
 }
 
 export default function Profile () {
-  const level = levelFromExp(ME.expTotal)
-  const { current, next } = levelProgress(ME.expTotal)
-  const history = EVENTS.filter((event) => event.myRole !== 'guest')
+  const navigate = useNavigate()
+  const { profile, signOut } = useAuth()
+  const { data: events, loading } = useAsync(
+    () => listEvents(profile?.id ?? null), [profile?.id],
+  )
+
+  if (!profile) return <TabScreen><Loading /></TabScreen>
+
+  const level = levelFromExp(profile.expTotal)
+  const { current, next } = levelProgress(profile.expTotal)
+  const history = (events ?? []).filter((event) => event.myRole !== 'guest')
 
   return (
     <TabScreen>
@@ -41,15 +53,15 @@ export default function Profile () {
           </button>
 
           <div className="relative">
-            <Avatar name={ME.nickname} src={ME.avatarUrl} size={130} className="rounded-[28px]" />
+            <Avatar name={profile.nickname} src={profile.avatarUrl} size={130} className="rounded-[28px]" />
             <span className="absolute -bottom-3 right-2 rounded-full bg-accent px-4 py-1.5
                              text-[17px] font-bold">
-              {ME.qpBalance} QP
+              {profile.qpBalance} QP
             </span>
           </div>
 
-          <h1 className="mt-5 text-[30px]">{ME.nickname}</h1>
-          <p className="text-[18px] text-white/80">{ME.city}</p>
+          <h1 className="mt-5 text-[30px]">{profile.nickname}</h1>
+          <p className="text-[18px] text-white/80">{profile.city}</p>
         </header>
 
         <section className="space-y-3">
@@ -63,9 +75,9 @@ export default function Profile () {
         <section className="space-y-3">
           <h2 className="text-[22px]">Статистика</h2>
           <div className="no-scrollbar -mx-5 flex gap-3 overflow-x-auto px-5">
-            <Stat value={ME.streakDays} label="Дней подряд" badge="+10 QP" tone="bright" />
-            <Stat value={ME.eventsAttended} label="Посещено" tone="dim" />
-            <Stat value={ME.eventsHosted} label="Проведено" tone="dim" />
+            <Stat value={profile.streakDays} label="Дней подряд" badge="+10 QP" tone="bright" />
+            <Stat value={profile.eventsAttended} label="Посещено" tone="dim" />
+            <Stat value={profile.eventsHosted} label="Проведено" tone="dim" />
           </div>
         </section>
 
@@ -78,6 +90,8 @@ export default function Profile () {
 
         <section className="space-y-3">
           <h2 className="text-[22px]">История</h2>
+          {loading && <Loading />}
+          {!loading && history.length === 0 && <Empty label="Здесь появятся ваши ивенты" />}
           {history.map((event) => (
             <Link
               key={event.id} to={`/event/${event.id}`}
@@ -93,12 +107,12 @@ export default function Profile () {
           ))}
         </section>
 
-        <Link
-          to="/login"
-          className="block rounded-card bg-surface-2 py-4 text-center text-[17px] text-muted"
+        <button
+          onClick={() => signOut().then(() => navigate('/start'))}
+          className="w-full rounded-card bg-surface-2 py-4 text-center text-[17px] text-muted"
         >
           Выйти
-        </Link>
+        </button>
       </div>
     </TabScreen>
   )

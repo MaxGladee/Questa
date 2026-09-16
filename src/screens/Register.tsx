@@ -1,21 +1,33 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button, Field } from '../components/ui'
+import { useAuth } from '../lib/auth'
 
 export default function Register () {
   const navigate = useNavigate()
+  const { signUp } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [repeat, setRepeat] = useState('')
   const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
 
   // Правила из ЧТЗ 5.1.1: корректный e-mail, пароль не короче восьми символов,
   // подтверждение должно совпадать.
-  function submit () {
+  async function submit () {
     if (!/^\S+@\S+\.\S+$/.test(email)) return setError('Проверьте адрес почты')
     if (password.length < 8) return setError('Пароль — минимум 8 символов')
     if (password !== repeat) return setError('Пароли не совпадают')
-    navigate('/confirm')
+
+    setBusy(true)
+    try {
+      const { needsCode } = await signUp(email.trim(), password)
+      navigate(needsCode ? '/confirm' : '/interests', { state: { email: email.trim() } })
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось зарегистрироваться')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -43,7 +55,9 @@ export default function Register () {
 
         {error && <p className="px-2 text-[15px] text-red-400">{error}</p>}
 
-        <Button onClick={submit} className="mt-2">Зарегистрироваться</Button>
+        <Button onClick={submit} disabled={busy} className="mt-2">
+          {busy ? 'Создаём аккаунт…' : 'Зарегистрироваться'}
+        </Button>
 
         <p className="text-center text-[16px] text-white/80">
           Уже зарегистрирован? <Link to="/login" className="font-semibold text-accent">Войти</Link>
