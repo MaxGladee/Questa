@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { Avatar, Field } from './ui'
 import { randomAvatar, randomNickname } from './Art'
-import { nextNickname, uploadImage } from '../lib/api'
+import { uploadImage } from '../lib/api'
 
 // Города по численности населения; Екатеринбург первым — приложение делается
 // для него, и на защите демонстрация идёт именно по нему.
@@ -15,19 +15,6 @@ export const POPULAR_CITIES = [
 export function NicknameField (
   { value, onChange }: { value: string; onChange: (value: string) => void },
 ) {
-  const [thinking, setThinking] = useState(false)
-
-  // Имена придумывает модель. Если она недоступна, берётся имя из набора,
-  // собранного заранее, — кнопка не должна ломаться из-за чужого сбоя.
-  async function suggest () {
-    setThinking(true)
-    try {
-      onChange(await nextNickname() ?? randomNickname())
-    } finally {
-      setThinking(false)
-    }
-  }
-
   return (
     <label className="block space-y-2">
       <span className="text-[15px] text-muted">Никнейм</span>
@@ -37,12 +24,11 @@ export function NicknameField (
           value={value} onChange={(e) => onChange(e.target.value)}
         />
         <button
-          type="button" onClick={suggest} disabled={thinking}
+          type="button" onClick={() => onChange(randomNickname())}
           title="Придумать никнейм" aria-label="Придумать никнейм"
-          className="shrink-0 rounded-field bg-field px-4 text-[22px] active:scale-95
-                     disabled:opacity-50"
+          className="shrink-0 rounded-field bg-field px-4 text-[22px] active:scale-95"
         >
-          {thinking ? '…' : '🎲'}
+          🎲
         </button>
       </div>
     </label>

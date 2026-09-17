@@ -5,23 +5,39 @@ export function GeneratedAvatar ({ seed, size }: { seed: string; size: number })
   const look = avatarLook(seed)
   const id = `av-${seed.replace(/[^a-z0-9]/gi, '')}`
 
+  const hw = look.headWidth
+  const hx = 50 - hw / 2
+  const hy = 86 - look.headHeight
+
+  // Глаза и рот строятся от вычисленных пропорций, а не жёстких координат:
+  // расстояние между глазами, их размер и ширина рта у каждого свои.
+  const lx = 50 - look.eyeGap / 2
+  const rx = 50 + look.eyeGap / 2
+  const ey = look.eyeLine
+  const r = look.eyeSize
+  const mw = look.mouthWidth
+  const my = look.mouthLine
+
+  const star = (cx: number) =>
+    `m${cx} ${ey - 7} 2.4 5.1 5.6.7-4.1 3.9 1 5.6-4.9-2.7-4.9 2.7 1-5.6-4.1-3.9 5.6-.7z`
+
   const eyes = {
-    dots:   <><circle cx="40" cy="52" r="5" /><circle cx="60" cy="52" r="5" /></>,
-    wide:   <><circle cx="39" cy="52" r="7" /><circle cx="61" cy="52" r="7" /></>,
-    happy:  <><path d="M34 54q6-8 12 0" /><path d="M54 54q6-8 12 0" /></>,
-    sleepy: <><path d="M34 53h12" /><path d="M54 53h12" /></>,
-    wink:   <><circle cx="40" cy="52" r="5" /><path d="M54 52h12" /></>,
-    star:   <><path d="m40 45 2.4 5.1 5.6.7-4.1 3.9 1 5.6-4.9-2.7-4.9 2.7 1-5.6-4.1-3.9 5.6-.7z" />
-              <path d="m60 45 2.4 5.1 5.6.7-4.1 3.9 1 5.6-4.9-2.7-4.9 2.7 1-5.6-4.1-3.9 5.6-.7z" /></>,
+    dots:   <><circle cx={lx} cy={ey} r={r} /><circle cx={rx} cy={ey} r={r} /></>,
+    wide:   <><circle cx={lx} cy={ey} r={r + 2} /><circle cx={rx} cy={ey} r={r + 2} /></>,
+    happy:  <><path d={`M${lx - 6} ${ey + 2}q6-8 12 0`} />
+              <path d={`M${rx - 6} ${ey + 2}q6-8 12 0`} /></>,
+    sleepy: <><path d={`M${lx - 6} ${ey + 1}h12`} /><path d={`M${rx - 6} ${ey + 1}h12`} /></>,
+    wink:   <><circle cx={lx} cy={ey} r={r} /><path d={`M${rx - 6} ${ey}h12`} /></>,
+    star:   <><path d={star(lx)} /><path d={star(rx)} /></>,
   }[look.eyes]
 
   const mouth = {
-    smile: <path d="M42 68q8 7 16 0" />,
-    grin:  <path d="M40 66q10 11 20 0z" />,
-    line:  <path d="M44 69h12" />,
-    small: <path d="M47 68q3 3 6 0" />,
-    open:  <ellipse cx="50" cy="69" rx="5" ry="6" />,
-    cat:   <path d="M43 67q3.5 4 7 0q3.5 4 7 0" />,
+    smile: <path d={`M${50 - mw / 2} ${my}q${mw / 2} 7 ${mw} 0`} />,
+    grin:  <path d={`M${50 - mw / 2} ${my - 2}q${mw / 2} 11 ${mw} 0z`} />,
+    line:  <path d={`M${50 - mw / 2} ${my + 1}h${mw}`} />,
+    small: <path d={`M${50 - mw / 4} ${my}q${mw / 4} 3 ${mw / 2} 0`} />,
+    open:  <ellipse cx="50" cy={my + 1} rx={mw / 3} ry={mw / 2.6} />,
+    cat:   <path d={`M${50 - mw / 2} ${my - 1}q${mw / 4} 4 ${mw / 2} 0q${mw / 4} 4 ${mw / 2} 0`} />,
   }[look.mouth]
 
   const filled = look.eyes === 'dots' || look.eyes === 'wide' || look.eyes === 'star'
@@ -36,37 +52,39 @@ export function GeneratedAvatar ({ seed, size }: { seed: string; size: number })
         </linearGradient>
       </defs>
 
-      <rect width="100" height="100" rx="24" fill={`url(#${id})`} />
+      {/* Поворот цвета делает палитру своей у каждого, а не одной из дюжины. */}
+      <g style={{ filter: `hue-rotate(${look.hueShift}deg)` }}>
+        <rect width="100" height="100" rx="24" fill={`url(#${id})`} />
+        <circle cx={look.blobX} cy={look.blobY} r={look.blobR} fill="#fff" opacity="0.09" />
+      </g>
 
-      {/* Фоновое пятно — чтобы одинаковые палитры не выглядели одинаково. */}
-      <circle
-        cx={20 + look.hue % 60} cy={18 + look.hue % 40} r="26"
-        fill="#fff" opacity="0.08"
-      />
+      <g transform={`rotate(${look.earTilt} 50 40)`}>
+        {look.ears === 'cat' && (
+          <path d={`M${hx + 10} 34 ${hx + 14} 14 ${hx + 28} 26Z
+                    M${hx + hw - 10} 34 ${hx + hw - 14} 14 ${hx + hw - 28} 26Z`}
+                fill={look.skin} />
+        )}
+        {look.ears === 'round' && (
+          <><circle cx={hx + 10} cy="30" r="10" fill={look.skin} />
+            <circle cx={hx + hw - 10} cy="30" r="10" fill={look.skin} /></>
+        )}
+        {look.ears === 'antenna' && (
+          <><path d="M50 26V12" stroke={look.skin} strokeWidth="4" strokeLinecap="round" />
+            <circle cx="50" cy="10" r="6" fill="#fff" opacity="0.85" /></>
+        )}
+      </g>
 
-      {look.ears === 'cat' && (
-        <path d={`M28 34 32 14 46 26Z M72 34 68 14 54 26Z`} fill={look.skin} />
-      )}
-      {look.ears === 'round' && (
-        <><circle cx="28" cy="30" r="10" fill={look.skin} />
-          <circle cx="72" cy="30" r="10" fill={look.skin} /></>
-      )}
-      {look.ears === 'antenna' && (
-        <><path d="M50 26V12" stroke={look.skin} strokeWidth="4" strokeLinecap="round" />
-          <circle cx="50" cy="10" r="6" fill="#fff" opacity="0.85" /></>
-      )}
-
-      <rect x="18" y="26" width="64" height="60" rx={look.round} fill={look.skin} />
+      <rect x={hx} y={hy} width={hw} height={look.headHeight} rx={look.round} fill={look.skin} />
 
       {look.blush && (
-        <><ellipse cx="30" cy="64" rx="7" ry="4" fill="#fff" opacity="0.22" />
-          <ellipse cx="70" cy="64" rx="7" ry="4" fill="#fff" opacity="0.22" /></>
+        <><ellipse cx={lx - 6} cy={my - 5} rx="7" ry="4" fill="#fff" opacity="0.22" />
+          <ellipse cx={rx + 6} cy={my - 5} rx="7" ry="4" fill="#fff" opacity="0.22" /></>
       )}
 
       {look.freckles && (
         <g fill="#fff" opacity="0.3">
-          <circle cx="34" cy="60" r="1.6" /><circle cx="39" cy="63" r="1.4" />
-          <circle cx="66" cy="60" r="1.6" /><circle cx="61" cy="63" r="1.4" />
+          <circle cx={lx - 4} cy={my - 8} r="1.6" /><circle cx={lx + 1} cy={my - 5} r="1.4" />
+          <circle cx={rx + 4} cy={my - 8} r="1.6" /><circle cx={rx - 1} cy={my - 5} r="1.4" />
         </g>
       )}
 

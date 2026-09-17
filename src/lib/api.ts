@@ -777,29 +777,3 @@ export async function uploadImage (file: File, userId: string, kind: 'avatar' | 
 
   return client.storage.from('media').getPublicUrl(path).data.publicUrl
 }
-
-// ───────────────────────── никнеймы от модели ───────────────────────────
-
-/**
- * Пачка придуманных никнеймов. Запрашивается один раз и расходуется по
- * одному: обращаться к модели на каждое нажатие кнопки долго и расточительно.
- */
-let nicknamePool: string[] = []
-
-export async function nextNickname (): Promise<string | null> {
-  if (nicknamePool.length > 0) return nicknamePool.pop()!
-  if (!isLive) return null
-
-  try {
-    const { data, error } = await db().functions.invoke('generate-quest', {
-      body: { kind: 'nicknames', count: 20 },
-    })
-
-    if (error || !Array.isArray(data?.nicknames)) return null
-
-    nicknamePool = data.nicknames as string[]
-    return nicknamePool.pop() ?? null
-  } catch {
-    return null
-  }
-}

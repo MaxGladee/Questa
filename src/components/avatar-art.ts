@@ -32,19 +32,44 @@ export interface AvatarLook {
   from: string
   to: string
   skin: string
+  /**
+   * Поворот цвета делает палитру своей у каждого. Диапазон узкий
+   * намеренно: полный круг уводил половину аватаров в болотно-зелёный,
+   * а приложение узнаётся по фиолетовому.
+   */
+  hueShift: number
   /** Форма головы: от круга к слегка квадратной. */
   round: number
+  headWidth: number
+  headHeight: number
   ears: 'cat' | 'round' | 'antenna' | 'none'
+  earTilt: number
   eyes: 'dots' | 'happy' | 'sleepy' | 'star' | 'wide' | 'wink'
+  eyeGap: number
+  eyeSize: number
+  eyeLine: number
   mouth: 'smile' | 'grin' | 'line' | 'small' | 'open' | 'cat'
+  mouthWidth: number
+  mouthLine: number
   blush: boolean
   freckles: boolean
-  hue: number
+  blobX: number
+  blobY: number
+  blobR: number
 }
 
 const pick = <T,>(random: () => number, list: T[]): T =>
   list[Math.floor(random() * list.length) % list.length]
 
+/** Число из диапазона с шагом в один пиксель или градус. */
+const span = (random: () => number, min: number, max: number) =>
+  Math.round(min + random() * (max - min))
+
+/**
+ * Черты берутся не только из списков: размеры, расстояния и поворот цвета
+ * задаются плавно. Из-за этого двух одинаковых аватаров практически не
+ * бывает — набор частей общий, а пропорции у каждого свои.
+ */
 export function avatarLook (seed: string): AvatarLook {
   const random = seededRandom(seed)
   const [from, to] = pick(random, PALETTES)
@@ -53,19 +78,35 @@ export function avatarLook (seed: string): AvatarLook {
     from,
     to,
     skin: pick(random, SKINS),
-    round: 28 + Math.floor(random() * 20),
+    hueShift: span(random, -32, 32),
+    round: span(random, 26, 48),
+    headWidth: span(random, 58, 70),
+    headHeight: span(random, 54, 64),
     ears: pick(random, ['cat', 'round', 'antenna', 'none'] as const),
+    earTilt: span(random, -8, 8),
     eyes: pick(random, ['dots', 'happy', 'sleepy', 'star', 'wide', 'wink'] as const),
+    eyeGap: span(random, 16, 26),
+    eyeSize: span(random, 4, 8),
+    eyeLine: span(random, 48, 56),
     mouth: pick(random, ['smile', 'grin', 'line', 'small', 'open', 'cat'] as const),
+    mouthWidth: span(random, 10, 20),
+    mouthLine: span(random, 65, 73),
     blush: random() > 0.45,
     freckles: random() > 0.7,
-    hue: Math.floor(random() * 360),
+    blobX: span(random, 8, 82),
+    blobY: span(random, 6, 50),
+    blobR: span(random, 16, 34),
   }
 }
 
-/** Новое зерно. Сочетаний хватает, чтобы совпадения были редкостью. */
+/**
+ * Новое зерно. Двенадцать символов дают столько сочетаний, что совпадение
+ * не встретится и на миллионах пользователей: узким местом было не
+ * разнообразие черт, а длина самого зерна.
+ */
 export function randomAvatarSeed (): string {
-  return `gen:${Math.random().toString(36).slice(2, 8)}`
+  const part = () => Math.random().toString(36).slice(2, 8)
+  return `gen:${(part() + part()).slice(0, 12)}`
 }
 
 export function parseAvatarSeed (value?: string): string | null {
