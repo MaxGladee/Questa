@@ -38,7 +38,10 @@ function marker (emoji: string) {
 export default function MapScreen () {
   const { profile } = useAuth()
   const { data } = useAsync(() => listEvents(profile?.id ?? null), [profile?.id])
-  const events: QuestaEvent[] = data ?? []
+  // Отменённые и завершённые на карте не нужны — туда уже не придёшь.
+  const events: QuestaEvent[] = (data ?? []).filter(
+    (event) => event.status === 'active' || event.status === 'in_progress',
+  )
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const [selected, setSelected] = useState<string | null>(null)

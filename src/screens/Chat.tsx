@@ -142,6 +142,12 @@ export default function Chat () {
         <div ref={bottom} />
       </div>
 
+      {event && (event.status === 'finished' || event.status === 'cancelled') ? (
+        <p className="px-4 pb-5 pt-3 text-center text-[16px] text-muted">
+          {event.status === 'cancelled' ? 'Ивент отменён' : 'Ивент завершён'} — чат доступен
+          только для чтения
+        </p>
+      ) : (
       <div className="flex items-center gap-3 px-4 pb-4 pt-2">
         <label className="flex flex-1 items-center gap-3 rounded-full bg-[#312B4B] px-4 py-3.5">
           <ClipIcon className="size-6 text-muted" />
@@ -161,6 +167,7 @@ export default function Chat () {
           ↑
         </button>
       </div>
+      )}
     </div>
   )
 }

@@ -65,8 +65,8 @@ export async function listEvents (viewerId: string | null): Promise<QuestaEvent[
 
   const { data, error } = await db()
     .from('event').select(EVENT_QUERY)
-    .in('status', ['active', 'in_progress'])
-    .order('starts_at')
+    .in('status', ['active', 'in_progress', 'finished', 'cancelled'])
+    .order('starts_at', { ascending: false })
 
   if (error) throw error
   return (data ?? []).map((row) => toEvent(row, viewerId))
@@ -110,10 +110,37 @@ interface GeneratedTask {
  * Создание ивента (ЧТЗ 5.5). Автор сразу становится организатором и
  * участником, а ивенту подбирается квест — пока из коллекции шаблонов.
  */
+/** Недельная квота на создание ивентов (ЧТЗ 4.1). */
+export const WEEKLY_EVENT_LIMIT = 2
+
+/**
+ * Сколько ивентов осталось создать на этой неделе.
+ *
+ * Считаются созданные, а не действующие: иначе «создал — отменил — создал
+ * заново» обходило бы квоту, и ограничение не защищало бы ни от чего.
+ */
+export async function eventsLeftThisWeek (userId: string): Promise<number> {
+  if (!isLive) return WEEKLY_EVENT_LIMIT
+
+  const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
+  const { count } = await db()
+    .from('event').select('id', { count: 'exact', head: true })
+    .eq('organizer_id', userId).gte('created_at', weekAgo)
+
+  return Math.max(0, WEEKLY_EVENT_LIMIT - (count ?? 0))
+}
+
 export async function createEvent (input: NewEvent, organizerId: string): Promise<string> {
   if (!isLive) return 'dnd'
 
   const client = db()
+
+  if (await eventsLeftThisWeek(organizerId) === 0) {
+    throw new Error(
+      `За неделю можно создать не больше ${WEEKLY_EVENT_LIMIT} ивентов. `
+      + 'Квота освободится, когда пройдёт неделя с момента создания предыдущих.',
+    )
+  }
 
   const { data: category } = await client
     .from('interest').select('id').eq('code', input.category).single()
@@ -317,6 +344,64 @@ export async function leaveEvent (eventId: string, userId: string): Promise<void
   const { error } = await db().from('event_participant')
     .delete().eq('event_id', eventId).eq('user_id', userId)
   if (error) throw error
+}
+
+/**
+ * Отмена ивента организатором (ЧТЗ 5.13, триггер 3). Возможна только до
+ * начала: после него ивент уже не отменяют, а завершают, иначе у людей
+ * пропадала бы из истории встреча, которая состоялась.
+ *
+ * Ивент не удаляется, а получает состояние «Отменён»: участникам нужно
+ * узнать, что встречи не будет, а не обнаружить пустоту на её месте.
+ */
+export async function cancelEvent (
+  eventId: string, organizerId: string, reason: string,
+): Promise<void> {
+  if (!isLive) return
+  const client = db()
+
+  const { data: event } = await client
+    .from('event').select('title, starts_at, status').eq('id', eventId).single()
+
+  if (!event) throw new Error('Ивент не найден')
+  if (event.status !== 'active') throw new Error('Отменить можно только ивент, который ещё не начался')
+  if (new Date(event.starts_at).getTime() <= Date.now()) {
+    throw new Error('Ивент уже начался — его можно только завершить')
+  }
+
+  const { error } = await client.from('event')
+    .update({ status: 'cancelled' }).eq('id', eventId).eq('organizer_id', organizerId)
+  if (error) throw error
+
+  await client.from('chat_message').insert({
+    event_id: eventId, user_id: null, kind: 'system',
+    body: `Ивент отменён организатором. Причина: ${reason}`,
+  })
+
+  const { data: members } = await client
+    .from('event_participant').select('user_id').eq('event_id', eventId)
+
+  await notify(
+    (members ?? []).map((member) => member.user_id).filter((id) => id !== organizerId),
+    'cancelled',
+    'Ивент отменён',
+    `«${event.title}» не состоится. Причина: ${reason}`,
+    eventId,
+  )
+}
+
+/** Завершение ивента организатором (ЧТЗ 5.13, триггер 1). */
+export async function finishEvent (eventId: string, organizerId: string): Promise<void> {
+  if (!isLive) return
+  const client = db()
+
+  const { error } = await client.from('event')
+    .update({ status: 'finished' }).eq('id', eventId).eq('organizer_id', organizerId)
+  if (error) throw error
+
+  await client.from('chat_message').insert({
+    event_id: eventId, user_id: null, kind: 'system', body: 'Ивент завершён. Чат закрыт для записи.',
+  })
 }
 
 /** Чек-ин по геолокации: +50 XP и системное сообщение в чат (ЧТЗ 5.9). */

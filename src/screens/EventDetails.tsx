@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { PlainScreen } from '../components/Layout'
-import { Avatar, Button, Chip } from '../components/ui'
+import { Avatar, Button, Chip, Field } from '../components/ui'
 import { Failed, Loading } from '../components/States'
 import { BackIcon, ChevronIcon, PinIcon, StarIcon } from '../components/icons'
 import { Cover } from '../components/Art'
 import { categoryTitle, formatDate, formatTime } from '../data/demo'
-import { getEvent, joinEvent, leaveEvent, openChat } from '../lib/api'
+import { cancelEvent, finishEvent, getEvent, joinEvent, leaveEvent, openChat } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
 
@@ -26,6 +26,8 @@ export default function EventDetails () {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const [joining, setJoining] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+  const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
 
   const { data: event, error, loading, reload } = useAsync(
@@ -55,6 +57,7 @@ export default function EventDetails () {
     } finally {
       setBusy(false)
       setJoining(false)
+      setCancelling(false)
     }
   }
 
@@ -174,7 +177,7 @@ export default function EventDetails () {
                 Чат откроется, когда наберётся {event.minParticipants} участника
               </p>
             )}
-            {event.myRole === 'participant' && (
+            {event.myRole === 'participant' && event.status === 'active' && (
               <button
                 disabled={busy}
                 onClick={() => act(() => leaveEvent(event.id, profile!.id))}
@@ -183,9 +186,60 @@ export default function EventDetails () {
                 Покинуть ивент
               </button>
             )}
+
+            {/* До начала ивент отменяют, после — завершают (ЧТЗ 5.13). */}
+            {event.myRole === 'organizer' && event.status === 'active' && (
+              <button
+                disabled={busy} onClick={() => setCancelling(true)}
+                className="w-full py-2 text-center text-[17px] text-red-400"
+              >
+                Отменить ивент
+              </button>
+            )}
+
+            {event.myRole === 'organizer' && event.status === 'in_progress' && (
+              <button
+                disabled={busy}
+                onClick={() => act(() => finishEvent(event.id, profile!.id))}
+                className="w-full py-2 text-center text-[17px] text-muted"
+              >
+                Завершить ивент
+              </button>
+            )}
           </div>
         )}
       </div>
+
+      {/* Отмена с причиной: участникам важно узнать, почему встречи не будет. */}
+      {cancelling && (
+        <div className="absolute inset-0 z-30 flex items-end bg-black/60 px-4 pb-6">
+          <div className="w-full space-y-4 rounded-[28px] bg-surface p-6">
+            <h2 className="text-center text-[22px]">Отменить ивент?</h2>
+            <p className="text-center text-[16px] leading-snug text-muted">
+              {event.participants.length > 1
+                ? `${event.participants.length - 1} чел. уже записались — им придёт уведомление с причиной.`
+                : 'Ивент пропадёт из поиска и с карты.'}
+            </p>
+
+            <Field
+              placeholder="Причина: заболел, перенос, не набралась группа…"
+              value={reason} onChange={(e) => setReason(e.target.value)} maxLength={120}
+            />
+
+            <p className="text-center text-[14px] leading-snug text-muted">
+              Отмена не возвращает недельную квоту на создание ивентов.
+            </p>
+
+            <Button
+              disabled={busy || reason.trim().length < 3}
+              onClick={() => act(() => cancelEvent(event.id, profile!.id, reason.trim()))}
+            >
+              {busy ? 'Отменяем…' : 'Отменить ивент'}
+            </Button>
+            <Button variant="quiet" onClick={() => setCancelling(false)}>Не отменять</Button>
+          </div>
+        </div>
+      )}
 
       {/* Подтверждение вступления — модальное окно из ЧТЗ 5.7, шаг 3. */}
       {joining && (
