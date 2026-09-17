@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { PhoneFrame } from './components/Layout'
 import { Loading } from './components/States'
+import { ToastProvider } from './components/Toast'
 import { AuthProvider, useAuth } from './lib/auth'
 import { isLive } from './lib/supabase'
 import Splash from './screens/Splash'
@@ -77,7 +78,9 @@ export default function App () {
     <HashRouter>
       <AuthProvider>
         <PhoneFrame>
-          <Router />
+          <ToastProvider>
+            <Router />
+          </ToastProvider>
         </PhoneFrame>
       </AuthProvider>
     </HashRouter>

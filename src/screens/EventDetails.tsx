@@ -9,6 +9,7 @@ import { categoryTitle, formatDate, formatTime } from '../data/demo'
 import { cancelEvent, finishEvent, getEvent, joinEvent, leaveEvent, openChat } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
+import { useToast } from '../components/Toast'
 
 const STATUS_LABEL = {
   active: 'Ожидание',
@@ -25,7 +26,9 @@ export default function EventDetails () {
   const { id } = useParams()
   const navigate = useNavigate()
   const { profile } = useAuth()
+  const toast = useToast()
   const [joining, setJoining] = useState(false)
+  const [actionError, setActionError] = useState('')
   const [cancelling, setCancelling] = useState(false)
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
@@ -48,16 +51,22 @@ export default function EventDetails () {
 
   const organizer = event.participants.find((person) => person.role === 'organizer')
   const full = event.participants.length >= event.maxParticipants
+  const started = new Date(event.startsAt).getTime() <= Date.now()
 
-  async function act (action: () => Promise<void>) {
+  async function act (action: () => Promise<void>, done?: () => void) {
     setBusy(true)
+    setActionError('')
     try {
       await action()
-      reload()
-    } finally {
-      setBusy(false)
       setJoining(false)
       setCancelling(false)
+      if (done) done()
+      else reload()
+    } catch (cause) {
+      // Без этого отказ выглядел так, будто кнопка просто не нажалась.
+      setActionError(cause instanceof Error ? cause.message : 'Не удалось выполнить действие')
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -180,15 +189,19 @@ export default function EventDetails () {
             {event.myRole === 'participant' && event.status === 'active' && (
               <button
                 disabled={busy}
-                onClick={() => act(() => leaveEvent(event.id, profile!.id))}
+                onClick={() => act(
+                  () => leaveEvent(event.id, profile!.id),
+                  () => { toast('Вы покинули ивент'); reload() },
+                )}
                 className="w-full py-2 text-center text-[17px] text-muted"
               >
                 Покинуть ивент
               </button>
             )}
 
-            {/* До начала ивент отменяют, после — завершают (ЧТЗ 5.13). */}
-            {event.myRole === 'organizer' && event.status === 'active' && (
+            {/* До начала ивент отменяют, после — завершают (ЧТЗ 5.13).
+                Кнопка меняется по времени начала, а не отказывает при нажатии. */}
+            {event.myRole === 'organizer' && event.status === 'active' && !started && (
               <button
                 disabled={busy} onClick={() => setCancelling(true)}
                 className="w-full py-2 text-center text-[17px] text-red-400"
@@ -197,14 +210,22 @@ export default function EventDetails () {
               </button>
             )}
 
-            {event.myRole === 'organizer' && event.status === 'in_progress' && (
+            {event.myRole === 'organizer' && started
+              && (event.status === 'active' || event.status === 'in_progress') && (
               <button
                 disabled={busy}
-                onClick={() => act(() => finishEvent(event.id, profile!.id))}
+                onClick={() => act(
+                  () => finishEvent(event.id, profile!.id),
+                  () => { toast('Ивент завершён'); navigate('/events') },
+                )}
                 className="w-full py-2 text-center text-[17px] text-muted"
               >
                 Завершить ивент
               </button>
+            )}
+
+            {actionError && (
+              <p className="text-center text-[15px] text-red-400">{actionError}</p>
             )}
           </div>
         )}
@@ -230,9 +251,14 @@ export default function EventDetails () {
               Отмена не возвращает недельную квоту на создание ивентов.
             </p>
 
+            {actionError && <p className="text-[15px] text-red-400">{actionError}</p>}
+
             <Button
               disabled={busy || reason.trim().length < 3}
-              onClick={() => act(() => cancelEvent(event.id, profile!.id, reason.trim()))}
+              onClick={() => act(
+                () => cancelEvent(event.id, profile!.id, reason.trim()),
+                () => { toast('Ивент отменён'); navigate('/events') },
+              )}
             >
               {busy ? 'Отменяем…' : 'Отменить ивент'}
             </Button>
@@ -260,7 +286,10 @@ export default function EventDetails () {
 
             <Button
               disabled={busy}
-              onClick={() => act(() => joinEvent(event.id, profile!.id))}
+              onClick={() => act(
+                () => joinEvent(event.id, profile!.id),
+                () => { toast('Вы записались'); reload() },
+              )}
             >
               {busy ? 'Занимаем место…' : 'Подтвердить'}
             </Button>

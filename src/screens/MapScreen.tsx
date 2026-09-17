@@ -9,6 +9,7 @@ import {
   CATEGORIES, categoryTitle, formatDate, formatTime,
   type CategoryCode, type QuestaEvent,
 } from '../data/demo'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { Avatar } from '../components/ui'
 import { PinIcon } from '../components/icons'
 import { distanceMeters, formatDistance } from '../lib/geo'
@@ -58,16 +59,33 @@ export default function MapScreen () {
     return () => navigator.geolocation.clearWatch(watch)
   }, [])
 
+  // Своя точка — аватар в кружке, а не безликая точка: на карте с метками
+  // ивентов сразу понятно, которая из них ты.
   useEffect(() => {
     const instance = map.current
-    if (!instance || !me) return
+    if (!instance || !me || !profile) return
 
-    const dot = L.circleMarker(me, {
-      radius: 8, color: '#fff', weight: 3, fillColor: '#00C400', fillOpacity: 1,
+    const avatar = renderToStaticMarkup(
+      <Avatar name={profile.nickname} src={profile.avatarUrl} size={38} />,
+    )
+
+    const marker = L.marker(me, {
+      icon: L.divIcon({
+        className: '',
+        html: `<span style="display:block;width:44px;height:44px;padding:3px;border-radius:999px;
+                            background:#8769FF;box-shadow:0 2px 10px rgb(0 0 0 / .5)">
+                 ${avatar}
+               </span>`,
+        iconSize: [44, 44],
+        iconAnchor: [22, 22],
+      }),
+      // Ниже меток ивентов: своё положение и так понятно, а чужие метки
+      // важнее не закрывать.
+      zIndexOffset: -500,
     }).addTo(instance)
 
-    return () => { dot.remove() }
-  }, [me])
+    return () => { marker.remove() }
+  }, [me, profile?.avatarUrl, profile?.nickname])
 
   // Маркеры пересобираются при смене фильтра категорий (ЧТЗ 5.4).
   useEffect(() => {
