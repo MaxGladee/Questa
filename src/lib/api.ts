@@ -155,6 +155,13 @@ async function buildQuestFromTemplate (eventId: string, categoryId: number) {
   })))
 }
 
+/**
+ * Текст системного сообщения о готовом квесте (ЧТЗ 5.8). Вынесен в константу,
+ * потому что по нему чат узнаёт это сообщение и рисует вместо строки карточку
+ * со списком заданий.
+ */
+export const QUEST_READY = 'Квесты доступны! Проверьте задания ↓'
+
 export async function joinEvent (eventId: string, userId: string): Promise<void> {
   if (!isLive) return
   const client = db()
@@ -201,6 +208,17 @@ export async function openChat (eventId: string): Promise<void> {
   await client.from('chat_message').insert({
     event_id: eventId, user_id: null, kind: 'system', body: 'Группа набрана, чат создан',
   })
+
+  // Квест подобран ещё при создании ивента, но объявить о нём можно только
+  // теперь — до открытия чата сообщению было некуда прийти.
+  const { data: quest } = await client
+    .from('quest').select('id').eq('event_id', eventId).maybeSingle()
+
+  if (quest) {
+    await client.from('chat_message').insert({
+      event_id: eventId, user_id: null, kind: 'system', body: QUEST_READY,
+    })
+  }
 }
 
 export async function leaveEvent (eventId: string, userId: string): Promise<void> {

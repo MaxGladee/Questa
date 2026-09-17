@@ -247,6 +247,7 @@ export const MESSAGES: ChatMessage[] = [
   { id: 'm5', eventId: 'karaoke', authorId: 'u5', authorName: 'Андрей', body: 'Привет, тебе надо помочь разобраться?', at: '09:38' },
   { id: 'm6', eventId: 'karaoke', authorId: 'me', body: 'Да, было бы очень даже неплохо!', at: '09:38' },
   { id: 'm7', eventId: 'karaoke', authorId: 'u3', authorName: 'Алексей', body: 'Ох, ребятки, сегодня мощно затусим!', at: '09:38' },
+  { id: 'm8', eventId: 'karaoke', authorId: null, body: 'Квесты доступны! Проверьте задания ↓', at: '09:40' },
 ]
 
 export function findEvent (id: string | undefined): QuestaEvent | undefined {

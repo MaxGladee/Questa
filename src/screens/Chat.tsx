@@ -3,9 +3,12 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { BackIcon, ClipIcon, SparkIcon } from '../components/icons'
 import { Failed, Loading } from '../components/States'
 import type { ChatMessage } from '../data/demo'
-import { getEvent, getQuest, listMessages, sendMessage, subscribeMessages } from '../lib/api'
+import {
+  QUEST_READY, getEvent, getQuest, listMessages, sendMessage, subscribeMessages,
+} from '../lib/api'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
+import { isLive } from '../lib/supabase'
 
 /** Чат ивента (ЧТЗ 5.8): сообщения участников и системные события. */
 export default function Chat () {
@@ -43,6 +46,18 @@ export default function Chat () {
     setDraft('')
     try {
       await sendMessage(id, profile.id, body)
+
+      // В боевом режиме сообщение вернётся по подписке. В демонстрационном
+      // подписки нет, поэтому показываем его сразу.
+      if (!isLive) {
+        setMessages((list) => [...list, {
+          id: `local-${list.length}`,
+          eventId: id!,
+          authorId: profile!.id,
+          body,
+          at: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+        }])
+      }
     } catch {
       setDraft(body)                    // не отправилось — вернём текст в поле
     } finally {
@@ -70,6 +85,28 @@ export default function Chat () {
         {error && <Failed message={error} />}
 
         {messages.map((message) => {
+          // Объявление о квесте — такое же системное сообщение, как остальные,
+          // но показывается карточкой со списком заданий.
+          if (message.authorId === null && message.body === QUEST_READY && quest?.quest) {
+            return (
+              <div key={message.id} className="space-y-2 pt-1">
+                <p className="text-center text-[16px] font-semibold">
+                  <SparkIcon className="mr-1.5 inline size-4 align-[-2px] text-accent" />
+                  {message.body}
+                </p>
+                <Link to={`/event/${id}/quest`} className="block rounded-[22px] bg-surface-2 p-4">
+                  <p className="text-[19px] font-bold text-accent">Ваши задания готовы!</p>
+                  <ul className="mt-2 space-y-1 text-[17px] leading-snug">
+                    {quest.quest.tasks.map((task) => (
+                      <li key={task.id}>{task.title}: {task.description}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-3 text-[17px] font-semibold">Перейти к заданиям →</p>
+                </Link>
+              </div>
+            )
+          }
+
           if (message.authorId === null) {
             return (
               <p key={message.id} className="text-center text-[16px] text-white/85">
@@ -96,24 +133,6 @@ export default function Chat () {
             </div>
           )
         })}
-
-        {quest?.quest && (
-          <div className="space-y-2 pt-2">
-            <p className="text-center text-[16px] font-semibold">
-              <SparkIcon className="mr-1.5 inline size-4 align-[-2px] text-accent" />
-              Квест готов! Проверьте задания ↓
-            </p>
-            <Link to={`/event/${id}/quest`} className="block rounded-[22px] bg-surface-2 p-4">
-              <p className="text-[19px] font-bold text-accent">Ваши задания готовы!</p>
-              <ul className="mt-2 space-y-1 text-[17px] leading-snug">
-                {quest.quest.tasks.map((task) => (
-                  <li key={task.id}>{task.title}: {task.description}</li>
-                ))}
-              </ul>
-              <p className="mt-3 text-[17px] font-semibold">Перейти к заданиям →</p>
-            </Link>
-          </div>
-        )}
 
         <div ref={bottom} />
       </div>
