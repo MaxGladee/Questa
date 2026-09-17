@@ -222,7 +222,7 @@ export default function EventDetails () {
                   () => leaveEvent(event.id, profile!.id),
                   () => { toast('Вы покинули ивент'); reload() },
                 )}
-                className="w-full py-2 text-center text-[17px] text-muted"
+                className="w-full py-2 text-center text-[17px] text-red-400/90"
               >
                 Покинуть ивент
               </button>
@@ -266,7 +266,7 @@ export default function EventDetails () {
         {event.myRole !== 'organizer' && (
           <button
             onClick={() => setReporting(true)}
-            className="w-full py-2 text-center text-[15px] text-muted"
+            className="w-full py-2 text-center text-[15px] text-red-400/90"
           >
             Пожаловаться
           </button>

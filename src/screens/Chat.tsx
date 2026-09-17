@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { BackIcon, ClipIcon, SparkIcon } from '../components/icons'
 import { Empty, Failed, Loading } from '../components/States'
+import { Avatar } from '../components/ui'
 import type { ChatMessage } from '../data/demo'
 import {
   QUEST_READY, chatImageUrl, fileComplaint, getEvent, getQuest, listMessages,
@@ -23,6 +24,49 @@ const EMOJI = [
   '🎉', '🎯', '☕', '🍕', '🍻', '🎸', '⚽', '🎲',
   '🚶', '🏃', '📍', '🗺', '⏰', '✅', '❌', '❓',
 ]
+
+
+/** Разделитель дней: «Сегодня», «Вчера» или дата. */
+function DayChip ({ label }: { label: string }) {
+  return (
+    <span className="mb-3 inline-block rounded-full bg-surface-2 px-3.5 py-1
+                     text-[13px] font-semibold text-muted">
+      {label}
+    </span>
+  )
+}
+
+/**
+ * Сообщение из одних смайликов. Такие показываются крупно и без пузыря —
+ * это реакция, и в переписке она читается иначе, чем фраза.
+ */
+function isEmojiOnly (body: string): boolean {
+  const text = body.replace(/\s/gu, '')
+  if (!text || text.length > 12) return false
+  if (/[\p{L}\p{N}]/u.test(text)) return false
+  return /\p{Extended_Pictographic}/u.test(text)
+}
+
+function sameDay (a: Date, b: Date) {
+  return a.toDateString() === b.toDateString()
+}
+
+/**
+ * Нужен ли перед сообщением разделитель дня. В демонстрационном режиме у
+ * сообщений нет полной даты — тогда разделителей нет вовсе.
+ */
+function daySeparator (message: ChatMessage, previous?: ChatMessage): string | null {
+  if (!message.createdAt) return null
+
+  const date = new Date(message.createdAt)
+  if (previous?.createdAt && sameDay(new Date(previous.createdAt), date)) return null
+
+  const now = new Date()
+  if (sameDay(date, now)) return 'Сегодня'
+  if (sameDay(date, new Date(Date.now() - 86_400_000))) return 'Вчера'
+
+  return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+}
 
 /** Чат ивента (ЧТЗ 5.8): сообщения участников и системные события. */
 export default function Chat () {
@@ -146,7 +190,23 @@ export default function Chat () {
       <header className="flex items-center gap-3 px-4 pb-2 pt-3">
         <button onClick={() => navigate(-1)} aria-label="Назад"><BackIcon className="size-7" /></button>
         <h1 className="flex-1 truncate text-center text-[21px]">{event?.title ?? 'Чат'}</h1>
-        <Link to={`/event/${id}`} aria-label="Детали ивента" className="text-[22px]">📋</Link>
+
+        {/*
+          Кнопка к заданиям появляется, только когда организатор начал
+          встречу: до этого вести из чата некуда — заданий ещё нет, и
+          неактивная кнопка в углу только сбивала бы с толку.
+          Место под неё остаётся занятым, чтобы заголовок не прыгал.
+        */}
+        {event?.status === 'in_progress' ? (
+          <Link
+            to={`/event/${id}/quest`} aria-label="Задания квеста"
+            className="grid size-10 shrink-0 place-items-center rounded-full bg-surface-2 text-accent"
+          >
+            <SparkIcon className="size-6" />
+          </Link>
+        ) : (
+          <span className="size-10 shrink-0" />
+        )}
       </header>
 
       {event?.status === 'in_progress' && (
@@ -156,7 +216,7 @@ export default function Chat () {
         </p>
       )}
 
-      <div className="no-scrollbar flex-1 space-y-3 overflow-y-auto px-4 pb-2">
+      <div className="no-scrollbar flex-1 overflow-y-auto px-4 pb-2">
         {loading && <Loading label="Загружаем переписку…" />}
         {error && <Failed message={error} />}
 
@@ -164,12 +224,27 @@ export default function Chat () {
           <Empty label="Пока тихо. Напишите первым — например, где именно встречаемся." />
         )}
 
-        {messages.map((message) => {
+        {messages.map((message, index) => {
+          const previous = messages[index - 1]
+          const next = messages[index + 1]
+
+          // Подряд идущие сообщения одного человека — одна группа: имя
+          // пишется один раз сверху, аватар стоит у последнего в группе,
+          // а сами пузыри прижимаются друг к другу.
+          const sameAsPrevious = Boolean(
+            previous && previous.authorId && previous.authorId === message.authorId,
+          )
+          const sameAsNext = Boolean(
+            next && next.authorId && next.authorId === message.authorId,
+          )
+          const separator = daySeparator(message, previous)
+          const gap = separator ? '' : sameAsPrevious ? 'mt-1' : 'mt-3'
+
           // Объявление о квесте — такое же системное сообщение, как остальные,
           // но показывается карточкой со списком заданий.
           if (message.authorId === null && message.body === QUEST_READY && quest?.quest) {
             return (
-              <div key={message.id} className="animate-message space-y-2 pt-1">
+              <div key={message.id} className="animate-message space-y-2 pt-3">
                 <p className="text-center text-[16px] font-semibold">
                   <SparkIcon className="mr-1.5 inline size-4 align-[-2px] text-accent" />
                   {quest.quest.source === 'ai'
@@ -191,43 +266,91 @@ export default function Chat () {
 
           if (message.authorId === null) {
             return (
-              <p key={message.id} className="text-center text-[16px] text-white/85">
-                {message.body} · {message.at}
-              </p>
+              <div key={message.id} className={`flex flex-col items-center ${gap}`}>
+                {separator && <DayChip label={separator} />}
+                <span className="rounded-full bg-surface-2 px-3.5 py-1.5 text-center text-[14px]
+                                 leading-snug text-muted">
+                  {message.body} · {message.at}
+                </span>
+              </div>
             )
           }
 
           const mine = message.authorId === profile?.id
           const picture = chatImageUrl(message.body)
+          const bigEmoji = isEmojiOnly(message.body)
+
+          // Уголок у пузыря скруглён меньше — и только у последнего в
+          // группе: получается «хвостик», как в мессенджерах.
+          const tail = sameAsNext ? '' : mine ? 'rounded-br-md' : 'rounded-bl-md'
+
           return (
-            <div
-              key={message.id}
-              onPointerDown={() => { if (!mine) holdStart(message) }}
-              onPointerUp={holdEnd}
-              onPointerLeave={holdEnd}
-              onContextMenu={(e) => { if (!mine) { e.preventDefault(); setReported(message) } }}
-              className={`animate-message flex ${mine ? 'justify-end' : 'justify-start'}`}
-            >
+            <div key={message.id} className={gap}>
+              {separator && (
+                <div className="flex justify-center pb-3"><DayChip label={separator} /></div>
+              )}
+
               <div
-                className={`max-w-[78%] rounded-[22px] px-4 py-3 ${
-                  mine ? 'bg-accent text-white' : 'bg-bubble text-bg'}`}
+                onPointerDown={() => { if (!mine) holdStart(message) }}
+                onPointerUp={holdEnd}
+                onPointerLeave={holdEnd}
+                onContextMenu={(e) => { if (!mine) { e.preventDefault(); setReported(message) } }}
+                className={`animate-message flex items-end gap-2 ${
+                  mine ? 'justify-end' : 'justify-start'}`}
               >
-                {!mine && (
-                  <p className="text-[17px] font-bold text-accent-2">{message.authorName}</p>
-                )}
-                {picture ? (
-                  <a href={picture} target="_blank" rel="noreferrer" className="block">
-                    <img
-                      src={picture} alt="Снимок в чате" loading="lazy"
-                      className="max-h-64 w-full rounded-[16px] object-cover"
+                {/* Аватар — у последнего сообщения группы; выше место под
+                    него остаётся пустым, чтобы пузыри стояли по одной линии. */}
+                {!mine && (sameAsNext
+                  ? <span className="size-8 shrink-0" />
+                  : (
+                    <Avatar
+                      name={message.authorName ?? 'Участник'} src={message.authorAvatar} size={32}
+                      className="shrink-0"
                     />
-                  </a>
-                ) : (
-                  <p className="text-[17px] leading-snug">{message.body}</p>
-                )}
-                <p className={`mt-1 text-right text-[13px] ${mine ? 'text-white/70' : 'text-bg/50'}`}>
-                  {message.at}
-                </p>
+                  ))}
+
+                <div
+                  className={`max-w-[76%] ${bigEmoji
+                    ? 'pb-1'
+                    : `rounded-[20px] ${tail} ${picture ? 'p-1' : 'px-3.5 py-2.5'} ${
+                        mine ? 'bg-accent text-white' : 'bg-bubble text-bg'}`}`}
+                >
+                  {!mine && !sameAsPrevious && !picture && (
+                    <p className="text-[15px] font-bold text-accent-2">{message.authorName}</p>
+                  )}
+
+                  {picture ? (
+                    <a href={picture} target="_blank" rel="noreferrer" className="relative block">
+                      <img
+                        src={picture} alt="Снимок в чате" loading="lazy"
+                        className="max-h-72 w-full rounded-[17px] object-cover"
+                      />
+                      <span className="absolute bottom-2 right-2 rounded-full bg-black/55 px-2 py-0.5
+                                       text-[12px] text-white">
+                        {message.at}
+                      </span>
+                    </a>
+                  ) : bigEmoji ? (
+                    // Сообщение из одних смайликов пузыря не просит: без
+                    // подложки оно читается как реакция, а не как реплика.
+                    <p className={`text-[40px] leading-tight ${mine ? 'text-right' : ''}`}>
+                      {message.body}
+                      <span className="ml-2 align-middle text-[12px] text-muted">{message.at}</span>
+                    </p>
+                  ) : (
+                    <p className="whitespace-pre-wrap text-[17px] leading-snug">
+                      {message.body}
+                      {/* Время встаёт в конец последней строки, а если она
+                          длинная — переносится вместе с ним, не ломая пузырь. */}
+                      <span
+                        className={`ml-2 inline-block translate-y-0.5 text-[12px] ${
+                          mine ? 'text-white/70' : 'text-bg/45'}`}
+                      >
+                        {message.at}
+                      </span>
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           )

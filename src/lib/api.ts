@@ -117,13 +117,21 @@ interface GeneratedTask {
 export const WEEKLY_EVENT_LIMIT = 2
 
 /**
+ * Квота временно снята на время отладки: проверить сценарии «создал —
+ * начал — завершил» два раза в неделю невозможно. Чтобы вернуть
+ * ограничение из ЧТЗ, достаточно поставить здесь true — остальной код
+ * менять не нужно.
+ */
+export const WEEKLY_LIMIT_ENABLED = false
+
+/**
  * Сколько ивентов осталось создать на этой неделе.
  *
  * Считаются созданные, а не действующие: иначе «создал — отменил — создал
  * заново» обходило бы квоту, и ограничение не защищало бы ни от чего.
  */
 export async function eventsLeftThisWeek (userId: string): Promise<number> {
-  if (!isLive) return WEEKLY_EVENT_LIMIT
+  if (!isLive || !WEEKLY_LIMIT_ENABLED) return WEEKLY_EVENT_LIMIT
 
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
   const { count } = await db()
@@ -138,7 +146,7 @@ export async function createEvent (input: NewEvent, organizerId: string): Promis
 
   const client = db()
 
-  if (await eventsLeftThisWeek(organizerId) === 0) {
+  if (WEEKLY_LIMIT_ENABLED && await eventsLeftThisWeek(organizerId) === 0) {
     throw new Error(
       `За неделю можно создать не больше ${WEEKLY_EVENT_LIMIT} ивентов. `
       + 'Квота освободится, когда пройдёт неделя с момента создания предыдущих.',
@@ -718,7 +726,7 @@ export async function listMessages (eventId: string): Promise<ChatMessage[]> {
 
   const { data, error } = await db()
     .from('chat_message')
-    .select('id, event_id, user_id, kind, body, created_at, app_user (nickname)')
+    .select('id, event_id, user_id, kind, body, created_at, app_user (nickname, avatar_url)')
     .eq('event_id', eventId).order('created_at')
 
   if (error) throw error
@@ -731,10 +739,12 @@ function toMessage (row: Row): ChatMessage {
     eventId: row.event_id,
     authorId: row.kind === 'system' ? null : row.user_id,
     authorName: row.app_user?.nickname,
+    authorAvatar: row.app_user?.avatar_url ?? undefined,
     body: row.body,
     at: new Date(row.created_at).toLocaleTimeString('ru-RU', {
       hour: '2-digit', minute: '2-digit',
     }),
+    createdAt: row.created_at,
   }
 }
 
@@ -761,12 +771,13 @@ export function subscribeMessages (
       async ({ new: row }) => {
         // В событии приходит только сама строка, без имени автора — дочитываем.
         const author = (row as Row).user_id
-        let nickname: string | undefined
+        let profile: Row | null = null
         if (author) {
-          const { data } = await client.from('app_user').select('nickname').eq('id', author).maybeSingle()
-          nickname = data?.nickname
+          const { data } = await client
+            .from('app_user').select('nickname, avatar_url').eq('id', author).maybeSingle()
+          profile = data
         }
-        onMessage(toMessage({ ...(row as Row), app_user: nickname ? { nickname } : null }))
+        onMessage(toMessage({ ...(row as Row), app_user: profile }))
       },
     )
     .subscribe()

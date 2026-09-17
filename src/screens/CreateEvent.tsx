@@ -5,7 +5,9 @@ import { CalendarIcon, CameraIcon, ClockIcon, CloseIcon, PinIcon } from '../comp
 import LocationPicker from './LocationPicker'
 import { CATEGORIES, type CategoryCode } from '../data/demo'
 import type { Idea } from '../data/ideas'
-import { WEEKLY_EVENT_LIMIT, createEvent, eventsLeftThisWeek, uploadImage } from '../lib/api'
+import {
+  WEEKLY_EVENT_LIMIT, WEEKLY_LIMIT_ENABLED, createEvent, eventsLeftThisWeek, uploadImage,
+} from '../lib/api'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
 
@@ -133,7 +135,7 @@ export default function CreateEvent () {
       </header>
 
       <div className="no-scrollbar flex-1 space-y-5 overflow-y-auto px-5 pb-8">
-        {left !== null && (
+        {WEEKLY_LIMIT_ENABLED && left !== null && (
           <p className={`rounded-card p-3.5 text-[15px] leading-snug ${
             left === 0 ? 'bg-red-500/15 text-red-300' : 'bg-surface-2 text-muted'}`}>
             {left === 0

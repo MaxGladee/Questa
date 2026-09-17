@@ -135,8 +135,12 @@ export interface ChatMessage {
   eventId: string
   authorId: string | null      // null — системное сообщение
   authorName?: string
+  authorAvatar?: string
   body: string
+  /** Время в готовом виде — его показывают у сообщения. */
   at: string
+  /** Момент отправки целиком: по нему сообщения делятся на дни. */
+  createdAt?: string
 }
 
 /** Уровень по шкале из ЧТЗ 5.12.4. */
