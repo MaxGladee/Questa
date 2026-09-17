@@ -4,11 +4,24 @@ import { BackIcon, ClipIcon, SparkIcon } from '../components/icons'
 import { Failed, Loading } from '../components/States'
 import type { ChatMessage } from '../data/demo'
 import {
-  QUEST_READY, getEvent, getQuest, listMessages, sendMessage, subscribeMessages,
+  QUEST_READY, chatImageUrl, getEvent, getQuest, listMessages, sendMessage,
+  subscribeMessages, uploadImage,
 } from '../lib/api'
+import { shrinkImage } from '../lib/image'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
+import { useToast } from '../components/Toast'
 import { isLive } from '../lib/supabase'
+
+// Набор смайликов на панели. Не библиотека на сотни килобайт, а то, чем
+// действительно отвечают в переписке: реакция, договорённость, место и время.
+const EMOJI = [
+  '😀', '😁', '😂', '🙂', '😉', '😍', '🤩', '😎',
+  '🤔', '🙃', '😅', '😭', '😱', '🥳', '🤝', '👍',
+  '👎', '👏', '🙏', '💪', '🔥', '✨', '💜', '❤️',
+  '🎉', '🎯', '☕', '🍕', '🍻', '🎸', '⚽', '🎲',
+  '🚶', '🏃', '📍', '🗺', '⏰', '✅', '❌', '❓',
+]
 
 /** Чат ивента (ЧТЗ 5.8): сообщения участников и системные события. */
 export default function Chat () {
@@ -18,7 +31,11 @@ export default function Chat () {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+  const [emojiOpen, setEmojiOpen] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const bottom = useRef<HTMLDivElement>(null)
+  const filePicker = useRef<HTMLInputElement>(null)
+  const toast = useToast()
 
   const { data: event } = useAsync(() => getEvent(id!, profile?.id ?? null), [id, profile?.id])
   const { data: quest } = useAsync(() => getQuest(id!, profile?.id ?? null), [id, profile?.id])
@@ -38,12 +55,13 @@ export default function Chat () {
     bottom.current?.scrollIntoView({ block: 'end' })
   }, [messages.length])
 
-  async function send () {
-    const body = draft.trim()
+  async function send (text?: string) {
+    const body = (text ?? draft).trim()
     if (!body || !profile || !id) return
 
     setSending(true)
-    setDraft('')
+    if (!text) setDraft('')
+    setEmojiOpen(false)
     try {
       await sendMessage(id, profile.id, body)
 
@@ -59,9 +77,30 @@ export default function Chat () {
         }])
       }
     } catch {
-      setDraft(body)                    // не отправилось — вернём текст в поле
+      if (!text) setDraft(body)         // не отправилось — вернём текст в поле
+      else toast('Сообщение не отправилось')
     } finally {
       setSending(false)
+    }
+  }
+
+  /**
+   * Снимок в чат. Он уменьшается прямо на устройстве, ложится в то же
+   * хранилище, что аватары и обложки, и уходит сообщением со ссылкой —
+   * получатели видят картинку, а не адрес.
+   */
+  async function attach (file: File | undefined) {
+    if (!file || !profile || !id) return
+
+    setUploading(true)
+    try {
+      const url = await uploadImage(await shrinkImage(file), profile.id, 'chat')
+      await send(url)
+    } catch (error) {
+      toast(error instanceof Error ? error.message : 'Не удалось отправить фото')
+    } finally {
+      setUploading(false)
+      if (filePicker.current) filePicker.current.value = ''
     }
   }
 
@@ -118,6 +157,7 @@ export default function Chat () {
           }
 
           const mine = message.authorId === profile?.id
+          const picture = chatImageUrl(message.body)
           return (
             <div
               key={message.id}
@@ -130,7 +170,16 @@ export default function Chat () {
                 {!mine && (
                   <p className="text-[17px] font-bold text-accent-2">{message.authorName}</p>
                 )}
-                <p className="text-[17px] leading-snug">{message.body}</p>
+                {picture ? (
+                  <a href={picture} target="_blank" rel="noreferrer" className="block">
+                    <img
+                      src={picture} alt="Снимок в чате" loading="lazy"
+                      className="max-h-64 w-full rounded-[16px] object-cover"
+                    />
+                  </a>
+                ) : (
+                  <p className="text-[17px] leading-snug">{message.body}</p>
+                )}
                 <p className={`mt-1 text-right text-[13px] ${mine ? 'text-white/70' : 'text-bg/50'}`}>
                   {message.at}
                 </p>
@@ -148,24 +197,61 @@ export default function Chat () {
           только для чтения
         </p>
       ) : (
-      <div className="flex items-center gap-3 px-4 pb-4 pt-2">
-        <label className="flex flex-1 items-center gap-3 rounded-full bg-[#312B4B] px-4 py-3.5">
-          <ClipIcon className="size-6 text-muted" />
+      <div className="px-4 pb-4 pt-2">
+        {emojiOpen && (
+          <div className="animate-sheet mb-2 grid grid-cols-8 gap-1 rounded-[22px] bg-surface-2 p-2">
+            {EMOJI.map((symbol) => (
+              <button
+                key={symbol} aria-label={symbol}
+                onClick={() => setDraft((text) => (text + symbol).slice(0, 500))}
+                className="grid h-10 place-items-center rounded-xl text-[22px] active:bg-surface-3"
+              >
+                {symbol}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-center gap-3">
           <input
-            autoComplete="off" data-1p-ignore data-lpignore="true"
-            value={draft} onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && send()}
-            placeholder="Начните писать..." maxLength={500} aria-label="Сообщение"
-            className="min-w-0 flex-1 bg-transparent text-[17px] outline-none placeholder:text-muted"
+            ref={filePicker} type="file" accept="image/*" className="hidden"
+            onChange={(e) => attach(e.target.files?.[0])}
           />
-        </label>
-        <button
-          onClick={send} disabled={sending || !draft.trim()} aria-label="Отправить"
-          className="grid size-12 shrink-0 place-items-center rounded-full bg-accent
-                     text-[22px] font-bold text-white disabled:opacity-40"
-        >
-          ↑
-        </button>
+
+          <label className="flex flex-1 items-center gap-2.5 rounded-full bg-[#312B4B] px-4 py-3.5">
+            <button
+              type="button" aria-label="Прикрепить фото" disabled={uploading}
+              onClick={() => filePicker.current?.click()}
+              className="shrink-0 text-muted disabled:opacity-50"
+            >
+              <ClipIcon className="size-6" />
+            </button>
+            <input
+              autoComplete="off" data-1p-ignore data-lpignore="true"
+              value={draft} onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && send()}
+              placeholder={uploading ? 'Отправляем фото…' : 'Начните писать...'}
+              maxLength={500} aria-label="Сообщение"
+              className="min-w-0 flex-1 bg-transparent text-[17px] outline-none placeholder:text-muted"
+            />
+            <button
+              type="button" aria-label="Смайлики"
+              onClick={() => setEmojiOpen((open) => !open)}
+              className={`shrink-0 text-[22px] leading-none ${emojiOpen ? '' : 'opacity-70'}`}
+            >
+              🙂
+            </button>
+          </label>
+
+          <button
+            onClick={() => send()} disabled={sending || uploading || !draft.trim()}
+            aria-label="Отправить"
+            className="grid size-12 shrink-0 place-items-center rounded-full bg-accent
+                       text-[22px] font-bold text-white disabled:opacity-40"
+          >
+            ↑
+          </button>
+        </div>
       </div>
       )}
     </div>

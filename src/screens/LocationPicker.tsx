@@ -4,11 +4,11 @@ import 'leaflet/dist/leaflet.css'
 import { addMapTiles, eventPin } from '../lib/map'
 import { Button, Field, useAutofillGuard } from '../components/ui'
 import { CloseIcon, PinIcon, SearchIcon } from '../components/icons'
-import { VENUES, type Venue } from '../data/venues'
-import { reverseGeocode } from '../lib/api'
+import { venuesFor, type Venue } from '../data/venues'
+import { cityCenter } from '../data/cities'
+import { reverseGeocode, searchPlaces } from '../lib/api'
 import { distanceMeters, formatDistance } from '../lib/geo'
-
-const CITY_CENTER: [number, number] = [56.8389, 60.6057]
+import { useAuth } from '../lib/auth'
 
 /**
  * Выбор места для ивента. Три пути к одному результату: известное место из
@@ -22,18 +22,29 @@ export default function LocationPicker (
     onPick: (place: { address: string; lat: number; lng: number }) => void
   },
 ) {
+  const { profile } = useAuth()
+  const city = profile?.city || null
+  const center = cityCenter(city)
+
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const marker = useRef<L.Marker | null>(null)
+  const myMarker = useRef<L.Marker | null>(null)
+  /** Карту к своей геопозиции подводим один раз: дальше её ведёт человек. */
+  const centeredOnMe = useRef(false)
 
   const [point, setPoint] = useState<[number, number]>(
-    initial ? [initial.lat, initial.lng] : CITY_CENTER,
+    initial ? [initial.lat, initial.lng] : center,
   )
   const [address, setAddress] = useState(initial?.address ?? '')
   const [me, setMe] = useState<[number, number] | null>(null)
   const [query, setQuery] = useState('')
+  const [found, setFound] = useState<Venue[]>([])
+  const [searching, setSearching] = useState(false)
   const [lookingUp, setLookingUp] = useState(false)
   const guard = useAutofillGuard()
+
+  const nearby = venuesFor(city)
 
   const pin = eventPin({ category: 'other' })
 
@@ -69,6 +80,53 @@ export default function LocationPicker (
     )
   }, [])
 
+  // Своя точка на карте выбора места: от неё считаются расстояния до мест,
+  // и по ней видно, что рядом. Место ивента человек ставит сам, поэтому
+  // карту подводим к себе только если точка ещё не выбрана заранее.
+  useEffect(() => {
+    const instance = map.current
+    if (!instance || !me) return
+
+    myMarker.current?.remove()
+    myMarker.current = L.marker(me, {
+      icon: L.divIcon({
+        className: '',
+        html: `<span style="display:block;width:16px;height:16px;border-radius:999px;
+                            background:#8769FF;border:3px solid #fff;
+                            box-shadow:0 0 0 6px rgb(135 105 255 / .25)"></span>`,
+        iconSize: [16, 16],
+        iconAnchor: [8, 8],
+      }),
+      zIndexOffset: -500,
+    }).addTo(instance)
+
+    if (!initial && !centeredOnMe.current) {
+      centeredOnMe.current = true
+      instance.setView(me, 15)
+    }
+
+    return () => { myMarker.current?.remove(); myMarker.current = null }
+  }, [me, initial])
+
+  // Поиск по карте: то, чего нет в подборке города. Запрос уходит не сразу,
+  // а через паузу — иначе на каждую букву уходил бы отдельный запрос.
+  useEffect(() => {
+    const text = query.trim()
+    if (text.length < 3) { setFound([]); setSearching(false); return }
+
+    setSearching(true)
+    let cancelled = false
+    const timer = setTimeout(() => {
+      searchPlaces(text, city).then((places) => {
+        if (cancelled) return
+        setFound(places)
+        setSearching(false)
+      })
+    }, 600)
+
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [query, city])
+
   function choose (place: Venue) {
     const next: [number, number] = [place.lat, place.lng]
     setPoint(next)
@@ -87,8 +145,13 @@ export default function LocationPicker (
     setLookingUp(false)
   }
 
-  const shown = VENUES.filter((venue) =>
-    venue.title.toLowerCase().includes(query.trim().toLowerCase()))
+  const text = query.trim().toLowerCase()
+  const matched = nearby.filter((venue) => venue.title.toLowerCase().includes(text))
+  // Найденное по карте показываем следом за своими местами, без повторов.
+  const shown = [
+    ...matched,
+    ...found.filter((place) => !matched.some((venue) => venue.title === place.title)),
+  ]
 
   return (
     <div className="absolute inset-0 z-40 flex flex-col bg-bg">
@@ -124,11 +187,23 @@ export default function LocationPicker (
           />
         </label>
 
+        {searching && (
+          <p className="px-1 text-[14px] text-muted">Ищем места по карте…</p>
+        )}
+
+        {!searching && shown.length === 0 && (
+          <p className="px-1 text-[14px] leading-snug text-muted">
+            {text.length < 3
+              ? `Для города «${city ?? 'не выбран'}» готовой подборки нет — найдите место по названию или нажмите на карту`
+              : 'Ничего не нашли. Попробуйте другое название или поставьте точку на карте'}
+          </p>
+        )}
+
         {shown.map((venue) => {
           const away = me ? distanceMeters(me, [venue.lat, venue.lng]) : null
           return (
             <button
-              key={venue.title} onClick={() => choose(venue)}
+              key={`${venue.title}:${venue.lat}`} onClick={() => choose(venue)}
               className="flex w-full items-center gap-3 rounded-card bg-surface-2 p-3.5 text-left"
             >
               <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-chip text-xl">

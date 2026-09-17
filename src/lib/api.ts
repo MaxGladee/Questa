@@ -1,4 +1,6 @@
 import { db, isLive } from './supabase'
+import { DEFAULT_CITY, cityCenter } from '../data/cities'
+import type { Venue } from '../data/venues'
 import {
   EVENTS, MESSAGES, CATEGORIES,
   type CategoryCode, type ChatMessage, type Participant, type Quest, type QuestTask,
@@ -254,6 +256,17 @@ async function buildQuestFromTemplate (eventId: string, categoryId: number) {
  * со списком заданий.
  */
 export const QUEST_READY = 'Квесты доступны! Проверьте задания ↓'
+
+/**
+ * Снимок в чате — обычное сообщение, телом которого стала ссылка на файл в
+ * хранилище. Отдельного вида сообщений для этого заводить не пришлось:
+ * ссылку узнаём по адресу хранилища, а всё остальное остаётся текстом.
+ */
+const CHAT_IMAGE = /^https:\/\/\S+\/storage\/v1\/object\/public\/media\/\S+\.(jpe?g|png|webp)$/i
+
+export function chatImageUrl (body: string): string | null {
+  return CHAT_IMAGE.test(body.trim()) ? body.trim() : null
+}
 
 export async function joinEvent (eventId: string, userId: string): Promise<void> {
   if (!isLive) return
@@ -680,22 +693,69 @@ export function categoryCodes (): CategoryCode[] {
  * платного ключа; в прототипе работает открытый Nominatim. Если адрес не
  * распознан, ставим центр города, чтобы создание ивента не срывалось.
  */
-const CITY_CENTER: [number, number] = [56.8389, 60.6057]
-
-export async function geocode (address: string): Promise<[number, number]> {
+export async function geocode (
+  address: string, city?: string | null,
+): Promise<[number, number]> {
+  const fallback = cityCenter(city)
   try {
-    const query = encodeURIComponent(`${address}, Екатеринбург`)
+    const query = encodeURIComponent(`${address}, ${city ?? DEFAULT_CITY.name}`)
     const response = await fetch(
       `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`,
       { headers: { 'Accept-Language': 'ru' } },
     )
-    if (!response.ok) return CITY_CENTER
+    if (!response.ok) return fallback
 
     const found = await response.json()
-    if (!found?.[0]) return CITY_CENTER
+    if (!found?.[0]) return fallback
     return [Number(found[0].lat), Number(found[0].lon)]
   } catch {
-    return CITY_CENTER
+    return fallback
+  }
+}
+
+/**
+ * Поиск места по названию в пределах города. Нужен там, где готового списка
+ * не хватает: своё кафе, двор или незнакомый город, которого в подборке нет.
+ * Ответ приводится к тому же виду, что и места из подборки, — экрану всё
+ * равно, откуда пришла точка.
+ */
+export async function searchPlaces (
+  query: string, city?: string | null,
+): Promise<Venue[]> {
+  const text = query.trim()
+  if (text.length < 3) return []
+
+  try {
+    const request = encodeURIComponent(`${text}, ${city ?? DEFAULT_CITY.name}`)
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${request}&format=json&limit=6&addressdetails=1`,
+      { headers: { 'Accept-Language': 'ru' } },
+    )
+    if (!response.ok) return []
+
+    const found: unknown[] = await response.json()
+
+    return found.map((item) => {
+      const place = item as {
+        display_name: string
+        lat: string
+        lon: string
+        address?: Record<string, string>
+      }
+      const parts = place.display_name.split(',').map((piece) => piece.trim())
+      const details = place.address ?? {}
+      const street = [details.road, details.house_number].filter(Boolean).join(', ')
+
+      return {
+        title: parts[0] ?? place.display_name,
+        address: street || parts.slice(1, 3).join(', '),
+        lat: Number(place.lat),
+        lng: Number(place.lon),
+        emoji: '📍',
+      }
+    })
+  } catch {
+    return []
   }
 }
 
@@ -726,7 +786,9 @@ export async function reverseGeocode (lat: number, lng: number): Promise<string>
  * Каждый пользователь пишет в свою папку — так устроены правила доступа в
  * supabase/002_photos_and_interests.sql: подменить чужой аватар нельзя.
  */
-export async function uploadImage (file: File, userId: string, kind: 'avatar' | 'cover'): Promise<string> {
+export async function uploadImage (
+  file: File, userId: string, kind: 'avatar' | 'cover' | 'chat',
+): Promise<string> {
   if (!isLive) throw new Error('Загрузка недоступна без базы')
 
   if (file.size > 5 * 1024 * 1024) throw new Error('Файл больше 5 МБ')

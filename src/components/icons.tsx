@@ -143,3 +143,11 @@ export const SparkIcon = ({ className }: IconProps) => (
     <path d="M12 2.5 13.8 9l6.5 1.8-6.5 1.8L12 19l-1.8-6.4L3.7 10.8 10.2 9 12 2.5Z" />
   </svg>
 )
+
+export const LocateIcon = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" className={className} {...stroke}>
+    <circle cx="12" cy="12" r="6" />
+    <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+    <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+  </svg>
+)

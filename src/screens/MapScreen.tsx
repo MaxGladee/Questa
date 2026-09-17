@@ -11,16 +11,17 @@ import {
 } from '../data/demo'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { Avatar } from '../components/ui'
-import { PinIcon } from '../components/icons'
+import { LocateIcon, PinIcon } from '../components/icons'
 import { distanceMeters, formatDistance } from '../lib/geo'
 import { listEvents } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
+import { useToast } from '../components/Toast'
+import { cityCenter } from '../data/cities'
 
 // Карта на OpenStreetMap. В ТЗ 11.1 указан MapKit Яндекса — он требует
 // платного ключа и заявки, поэтому в прототипе подключён бесплатный источник
 // тайлов. Замена провайдера затрагивает только этот файл.
-const CENTER: [number, number] = [56.8389, 60.6057]   // Екатеринбург
 
 export default function MapScreen () {
   const { profile } = useAuth()
@@ -34,25 +35,39 @@ export default function MapScreen () {
   const [selected, setSelected] = useState<string | null>(null)
   const [categories, setCategories] = useState<CategoryCode[]>([])
   const [me, setMe] = useState<[number, number] | null>(null)
+  const [geoDenied, setGeoDenied] = useState(false)
+  // К своей точке карту подводим один раз — дальше её двигает человек.
+  const centeredOnMe = useRef(false)
+  const toast = useToast()
 
   useEffect(() => {
     if (!container.current || map.current) return
 
     map.current = L.map(container.current, { zoomControl: false })
-      .setView(CENTER, 12)
+      .setView(cityCenter(profile?.city), 12)
 
     addMapTiles(map.current)
 
     return () => { map.current?.remove(); map.current = null }
-  }, [])
+  }, [profile?.city])
 
   // Своя точка на карте: без неё непонятно, далеко ли до ивентов.
   useEffect(() => {
     if (!('geolocation' in navigator)) return
 
     const watch = navigator.geolocation.watchPosition(
-      ({ coords }) => setMe([coords.latitude, coords.longitude]),
-      () => {},
+      ({ coords }) => {
+        setGeoDenied(false)
+        setMe([coords.latitude, coords.longitude])
+
+        // Первый отклик приводит карту к себе: иначе метка «я» остаётся
+        // где-то за краем экрана, и кажется, что её нет вовсе.
+        if (!centeredOnMe.current) {
+          centeredOnMe.current = true
+          map.current?.setView([coords.latitude, coords.longitude], 14)
+        }
+      },
+      () => setGeoDenied(true),
       { enableHighAccuracy: true, maximumAge: 30_000, timeout: 20_000 },
     )
 
@@ -120,6 +135,32 @@ export default function MapScreen () {
 
   const event = events.find((item) => item.id === selected)
 
+  function showMe () {
+    if (me) {
+      map.current?.flyTo(me, 15)
+      return
+    }
+
+    if (!('geolocation' in navigator)) {
+      toast('Браузер не умеет определять геопозицию')
+      return
+    }
+
+    toast(geoDenied
+      ? 'Доступ к геопозиции закрыт — включите его в настройках сайта'
+      : 'Определяем, где вы…')
+
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setGeoDenied(false)
+        setMe([coords.latitude, coords.longitude])
+        map.current?.flyTo([coords.latitude, coords.longitude], 15)
+      },
+      () => { setGeoDenied(true); toast('Не удалось определить геопозицию') },
+      { enableHighAccuracy: true, timeout: 15_000 },
+    )
+  }
+
   return (
     <TabScreen fullBleed>
       <div className="relative h-full">
@@ -143,6 +184,19 @@ export default function MapScreen () {
             </button>
           ))}
         </div>
+
+        {/*
+          Кнопка «я на карте»: возвращает к своей точке, когда карту увели в
+          сторону, и объясняет, если браузер не отдаёт геопозицию.
+        */}
+        <button
+          onClick={showMe} aria-label="Моя геолокация"
+          className={`absolute right-4 z-10 grid size-12 place-items-center rounded-full
+                      bg-surface shadow-lg transition ${event ? 'bottom-[19.5rem]' : 'bottom-24'}
+                      ${me ? 'text-accent' : 'text-muted'}`}
+        >
+          <LocateIcon className="size-6" />
+        </button>
 
         {/* Карточка по нажатию на маркер: всё, по чему решают, идти или нет. */}
         {event && (
