@@ -23,7 +23,7 @@ alter table event add column if not exists cancel_reason text;
 -- ───────────────── открытие чата при наборе группы ─────────────────
 
 create or replace function open_chat_when_full () returns trigger
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public as $open_chat_when_full$
 declare
   target event%rowtype;
   taken  integer;
@@ -49,7 +49,7 @@ begin
 
   return new;
 end;
-$$;
+$open_chat_when_full$;
 
 drop trigger if exists open_chat_after_join on event_participant;
 
@@ -60,7 +60,7 @@ for each row execute function open_chat_when_full();
 -- ─────────────── системные сообщения о жизни ивента ────────────────
 
 create or replace function announce_event_change () returns trigger
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public as $announce_event_change$
 declare
   has_quest boolean;
 begin
@@ -119,7 +119,7 @@ begin
 
   return new;
 end;
-$$;
+$announce_event_change$;
 
 drop trigger if exists announce_event_change_after_update on event;
 

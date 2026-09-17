@@ -19,7 +19,7 @@
 -- ─────────────── сообщение о выполненном задании ───────────────
 
 create or replace function announce_task_completion () returns trigger
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public as $announce_task_completion$
 declare
   event_id_ uuid;
   who       text;
@@ -47,7 +47,7 @@ begin
 
   return new;
 end;
-$$;
+$announce_task_completion$;
 
 drop trigger if exists announce_task_completion_after_insert on task_completion;
 
@@ -58,7 +58,7 @@ for each row execute function announce_task_completion();
 -- ─────────────────── пересчёт среднего рейтинга ────────────────────
 
 create or replace function recalc_average_rating () returns trigger
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public as $recalc_average_rating$
 begin
   if new.target_user_id is not null then
     update app_user
@@ -69,7 +69,7 @@ begin
   end if;
   return new;
 end;
-$$;
+$recalc_average_rating$;
 
 -- ──────────────── объявление о завершении ивента ────────────────
 --
@@ -80,7 +80,7 @@ $$;
 alter table event add column if not exists cancel_reason text;
 
 create or replace function announce_event_change () returns trigger
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public as $announce_event_change$
 declare
   has_quest boolean;
 begin
@@ -155,7 +155,7 @@ begin
 
   return new;
 end;
-$$;
+$announce_event_change$;
 
 drop trigger if exists announce_event_change_after_update on event;
 
@@ -170,7 +170,7 @@ for each row execute function announce_event_change();
 -- пишет его тоже база.
 
 create or replace function announce_check_in () returns trigger
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public as $announce_check_in$
 declare
   who text;
 begin
@@ -186,7 +186,7 @@ begin
 
   return new;
 end;
-$$;
+$announce_check_in$;
 
 drop trigger if exists announce_check_in_after_update on event_participant;
 
