@@ -152,7 +152,8 @@ export default function EventDetails () {
             <div className="min-w-0 flex-1">
               <p className="truncate text-[18px] font-semibold">{organizer.nickname}</p>
               <p className="flex items-center gap-1.5 text-[16px]">
-                <StarIcon className="size-4 text-yellow-400" /> 4.8
+                <StarIcon className="size-4 text-warning" />
+                {organizer.rating ? organizer.rating.toFixed(1) : 'пока без оценок'}
               </p>
             </div>
             <ChevronIcon className="size-5 shrink-0 text-muted" />
@@ -187,6 +188,13 @@ export default function EventDetails () {
                 Задания откроются, когда организатор начнёт встречу
               </p>
             )}
+            {/* Завершённый ивент ведёт к итогам: сколько кто набрал и оценки. */}
+            {event.status === 'finished' && (
+              <Button onClick={() => navigate(`/event/${event.id}/summary`)}>
+                Итоги и оценки
+              </Button>
+            )}
+
             {event.chatOpened ? (
               <Button
                 variant={event.status === 'in_progress' ? 'ghost' : 'primary'}
@@ -234,7 +242,10 @@ export default function EventDetails () {
                 disabled={busy}
                 onClick={() => act(
                   () => finishEvent(event.id, profile!.id),
-                  () => { toast('Ивент завершён'); navigate('/events') },
+                  () => {
+                    toast('Ивент завершён')
+                    navigate(`/event/${event.id}/summary`)
+                  },
                 )}
                 className="w-full py-2 text-center text-[17px] text-muted"
               >

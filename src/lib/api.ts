@@ -25,7 +25,7 @@ const EVENT_QUERY = `
   category:interest (code),
   event_participant (
     user_id, role, checked_in_at,
-    app_user (nickname, avatar_url)
+    app_user (nickname, avatar_url, average_rating)
   )
 `
 
@@ -38,6 +38,7 @@ function toEvent (row: Row, viewerId: string | null): QuestaEvent {
     role: item.role,
     qpEarned: 0,                         // заполняется из выполненных заданий
     checkedIn: Boolean(item.checked_in_at),
+    rating: Number(item.app_user?.average_rating ?? 0),
   }))
 
   const mine = participants.find((person) => person.id === viewerId)
@@ -373,18 +374,80 @@ export async function startEvent (eventId: string, organizerId: string): Promise
   // системные сообщения приложению писать нечем — у них нет автора.
 }
 
-/** Завершение ивента организатором (ЧТЗ 5.13, триггер 1). */
+/**
+ * Завершение ивента организатором (ЧТЗ 5.13, триггер 1). Сообщение в чат и
+ * приглашение оценить друг друга рассылает триггер announce_event_change.
+ */
 export async function finishEvent (eventId: string, organizerId: string): Promise<void> {
   if (!isLive) return
-  const client = db()
 
-  const { error } = await client.from('event')
-    .update({ status: 'finished' }).eq('id', eventId).eq('organizer_id', organizerId)
+  const { error } = await db().from('event')
+    .update({ status: 'finished' })
+    .eq('id', eventId).eq('organizer_id', organizerId)
+    .in('status', ['active', 'in_progress'])
+
   if (error) throw error
+}
 
-  await client.from('chat_message').insert({
-    event_id: eventId, user_id: null, kind: 'system', body: 'Ивент завершён. Чат закрыт для записи.',
+// ─────────────────── итоги ивента и взаимные оценки ───────────────────
+
+/** Оценки, которые текущий пользователь уже поставил на этом ивенте. */
+export interface GivenRating {
+  /** null — оценка самого ивента, а не участника. */
+  targetUserId: string | null
+  score: number
+}
+
+const demoRatings = new Map<string, number>()
+
+export async function listMyRatings (
+  eventId: string, authorId: string,
+): Promise<GivenRating[]> {
+  if (!isLive) {
+    return [...demoRatings.entries()].map(([target, score]) => ({
+      targetUserId: target === 'event' ? null : target,
+      score,
+    }))
+  }
+
+  const { data } = await db().from('rating')
+    .select('target_user_id, score').eq('event_id', eventId).eq('author_id', authorId)
+
+  return (data ?? []).map((row) => ({
+    targetUserId: row.target_user_id, score: row.score,
+  }))
+}
+
+/**
+ * Оценка участника или самого ивента (ЧТЗ 5.14). Средний балл человека
+ * пересчитывает база — приложению чужую строку менять не разрешено.
+ *
+ * Оценка ставится один раз: повторная попытка не ошибка, а просто
+ * ничего не меняет, поэтому конфликт по уникальности гасим здесь.
+ */
+export async function rateUser (
+  { eventId, authorId, targetUserId, score, comment }: {
+    eventId: string
+    authorId: string
+    targetUserId: string | null
+    score: number
+    comment?: string
+  },
+): Promise<void> {
+  if (!isLive) {
+    demoRatings.set(targetUserId ?? 'event', score)
+    return
+  }
+
+  const { error } = await db().from('rating').insert({
+    event_id: eventId,
+    author_id: authorId,
+    target_user_id: targetUserId,
+    score,
+    comment: comment?.trim() || null,
   })
+
+  if (error && !error.message.includes('duplicate key')) throw error
 }
 
 /** Чек-ин по геолокации: +50 XP и системное сообщение в чат (ЧТЗ 5.9). */
@@ -431,7 +494,11 @@ export async function getQuest (eventId: string, viewerId: string | null): Promi
     const earned = Object.fromEntries(
       (event?.participants ?? []).map((person) => [person.id, person.qpEarned]),
     )
-    earned[viewerId ?? 'me'] = [...demoCompleted.values()].reduce((sum, qp) => sum + qp, 0)
+    // В демонстрационном режиме свои очки считаются по пройденным здесь же
+    // заданиям, но пока ничего не пройдено, показываем заготовленный результат.
+    if (demoCompleted.size > 0) {
+      earned[viewerId ?? 'me'] = [...demoCompleted.values()].reduce((sum, qp) => sum + qp, 0)
+    }
 
     return { quest, earned }
   }
@@ -489,11 +556,9 @@ export async function getQuest (eventId: string, viewerId: string | null): Promi
  * сообщение в чат (ЧТЗ 5.11, 5.12).
  */
 export async function completeTask (
-  { eventId, task, userId, nickname, qpAwarded, photoUrl, answer }: {
-    eventId: string
+  { task, userId, qpAwarded, photoUrl, answer }: {
     task: QuestTask
     userId: string
-    nickname: string
     qpAwarded: number
     photoUrl?: string
     answer?: unknown
@@ -515,6 +580,9 @@ export async function completeTask (
   })
   if (error) throw error
 
+  // Сообщение в чат о выполненном задании и уведомления остальным ставит
+  // триггер announce_task_completion: у системных сообщений нет автора, и
+  // из приложения они не проходят проверку доступа.
   await Promise.all([
     client.from('qp_transaction').insert({
       user_id: userId, amount: qpAwarded, reason: `task:${task.type}`,
@@ -524,22 +592,7 @@ export async function completeTask (
       user_id: userId, amount: 10, reason: 'task',
       event_key: `xp:${task.id}:${userId}`,
     }),
-    client.from('chat_message').insert({
-      event_id: eventId, user_id: null, kind: 'system',
-      body: `${nickname} выполнил задание «${task.title}» · +${qpAwarded} QP`,
-    }),
   ])
-
-  const { data: members } = await client
-    .from('event_participant').select('user_id').eq('event_id', eventId)
-
-  await notify(
-    (members ?? []).map((member) => member.user_id).filter((id) => id !== userId),
-    'task',
-    'Задание выполнено',
-    `${nickname} справился с заданием «${task.title}»`,
-    eventId,
-  )
 }
 
 // ────────────────────────────── уведомления ─────────────────────────────

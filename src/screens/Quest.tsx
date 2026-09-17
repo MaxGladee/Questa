@@ -69,7 +69,7 @@ export default function Quest () {
     setBusy(true)
     try {
       await completeTask({
-        eventId: id, task, userId: profile.id, nickname: profile.nickname,
+        task, userId: profile.id,
         qpAwarded, answer, photoUrl,
       })
       await refreshProfile()

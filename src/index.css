@@ -14,6 +14,8 @@
   --color-accent-soft: #A78FFF;
   --color-accent-2:  #6049BC;
   --color-success:   #00C400;
+  /* Звёзды оценок: золотой из макета карточки профиля. */
+  --color-warning:   #FFC542;
   --color-bubble:    #DADADA;
   --color-text:      #FFFFFF;
   --color-muted:     #9A93B8;

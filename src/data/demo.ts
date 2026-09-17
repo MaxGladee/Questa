@@ -78,6 +78,8 @@ export interface Participant {
   role: 'organizer' | 'participant'
   qpEarned: number
   checkedIn: boolean
+  /** Средний балл человека по оценкам других (ЧТЗ 5.14). */
+  rating?: number
 }
 
 export interface QuestTask {
