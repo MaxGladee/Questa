@@ -102,7 +102,10 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.02em; }
    поэтому улицы и подписи остаются читаемыми.
 
    Накладка лежит выше тайлов, но ниже маркеров (у Leaflet они на 400 и
-   выше), поэтому метки ивентов, карточка и своя точка сохраняют свои цвета. */
+   выше), поэтому метки ивентов, карточка и своя точка сохраняют свои цвета.
+
+   Сила накладки подобрана по пределу читаемости: выше 0.75 карта уходит в
+   электрический синий и названия улиц начинают теряться. */
 
 .questa-map .leaflet-tile-pane {
   filter: invert(0.88) grayscale(1) brightness(0.75) contrast(1.15);
@@ -114,7 +117,7 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.02em; }
   inset: 0;
   z-index: 300;
   background: var(--color-accent);
-  opacity: 0.3;
+  opacity: 0.75;
   mix-blend-mode: color;
   pointer-events: none;
 }
