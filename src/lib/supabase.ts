@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
 const url = import.meta.env.VITE_SUPABASE_URL
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
 
 /**
  * Приложение работает в двух режимах.
@@ -13,10 +13,10 @@ const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
  * src/data/demo.ts. Нужен для разработки и как страховка: если база окажется
  * недоступна, приложение всё равно откроется и его можно будет показать.
  */
-export const isLive = Boolean(url && anonKey)
+export const isLive = Boolean(url && publishableKey)
 
 export const supabase = isLive
-  ? createClient(url, anonKey, {
+  ? createClient(url, publishableKey, {
       auth: { persistSession: true, autoRefreshToken: true },
     })
   : null

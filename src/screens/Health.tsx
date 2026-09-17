@@ -171,7 +171,7 @@ export default function Health () {
     setAiBusy(true)
     setAiState({ key: 'ai', title: 'ИИ-генерация квестов', status: 'checking', detail: 'спрашиваем модель…' })
 
-    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+    const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string
     const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-quest`
 
     const token = (await db().auth.getSession()).data.session?.access_token
@@ -184,8 +184,8 @@ export default function Health () {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          apikey: anonKey,
-          authorization: `Bearer ${token ?? anonKey}`,
+          apikey: key,
+          authorization: `Bearer ${token ?? key}`,
         },
         body: JSON.stringify({
           title: 'Проверка связи',
