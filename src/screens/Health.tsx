@@ -216,7 +216,15 @@ export default function Health () {
               503: 'функция создана, но ключ GEMINI_API_KEY не задан в Secrets',
             }[response.status] ?? 'квесты будут браться из шаблонов'
 
-        report('warn', `${response.status}: ${hint} · ${token_note} · ответ: ${raw.slice(0, 200)}`)
+        // В теле может лежать поле details — там написано, что именно
+        // ответил провайдер модели. Оно и нужно, а не общая фраза.
+        let extra = raw.slice(0, 200)
+        try {
+          const parsed = JSON.parse(raw)
+          if (Array.isArray(parsed?.details)) extra = parsed.details.join(' | ').slice(0, 400)
+        } catch { /* тело не JSON — покажем как есть */ }
+
+        report('warn', `${response.status}: ${hint} · ${token_note} · ${extra}`)
         return
       }
 

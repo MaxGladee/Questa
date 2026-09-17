@@ -10,7 +10,17 @@
 // («валидация ответа модели» из ТЗ 4.2.6). Если проверка не прошла, клиент
 // берёт шаблон из коллекции — квест у ивента будет в любом случае.
 
-const MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-2.5-flash'
+// Названия моделей у провайдера меняются, и промах по имени выглядит как
+// «модель недоступна». Поэтому перебираем несколько вариантов по очереди:
+// первый, который ответит, и используется. Своё имя можно задать через
+// переменную GEMINI_MODEL — тогда оно пробуется первым.
+const MODELS = [
+  Deno.env.get('GEMINI_MODEL'),
+  'gemini-2.5-flash',
+  'gemini-flash-latest',
+  'gemini-2.0-flash',
+].filter(Boolean) as string[]
+
 const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models'
 
 const CORS = {
@@ -192,35 +202,54 @@ Deno.serve(async (request) => {
     return json({ error: 'Не хватает контекста ивента' }, 400)
   }
 
-  try {
-    const response = await fetch(`${ENDPOINT}/${MODEL}:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: buildPrompt(ctx) }] }],
-        generationConfig: {
-          temperature: 1,
-          responseMimeType: 'application/json',
-          responseSchema: RESPONSE_SCHEMA,
-        },
-      }),
-    })
+  const body = JSON.stringify({
+    contents: [{ parts: [{ text: buildPrompt(ctx) }] }],
+    generationConfig: {
+      temperature: 1,
+      responseMimeType: 'application/json',
+      responseSchema: RESPONSE_SCHEMA,
+    },
+  })
 
-    if (!response.ok) {
-      console.error('Модель ответила', response.status, await response.text())
-      return json({ error: 'Модель недоступна' }, 502)
+  // Причина отказа возвращается вызывающему, а не только пишется в журнал:
+  // журнал функции виден лишь в панели Supabase, а разбираться приходится по
+  // тому, что видно в приложении.
+  const failures: string[] = []
+
+  for (const model of MODELS) {
+    try {
+      const response = await fetch(`${ENDPOINT}/${model}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body,
+      })
+
+      if (!response.ok) {
+        const detail = (await response.text()).replace(/\s+/g, ' ').slice(0, 200)
+        failures.push(`${model} → ${response.status}: ${detail}`)
+        continue
+      }
+
+      const payload = await response.json()
+      const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text
+
+      if (typeof text !== 'string') {
+        failures.push(`${model} → ответ без текста`)
+        continue
+      }
+
+      const quest = validateQuest(JSON.parse(text))
+      if (!quest) {
+        failures.push(`${model} → ответ не соответствует схеме квеста`)
+        continue
+      }
+
+      return json({ ...quest, model })
+    } catch (cause) {
+      failures.push(`${model} → ${cause instanceof Error ? cause.message : String(cause)}`)
     }
-
-    const payload = await response.json()
-    const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text
-    if (typeof text !== 'string') return json({ error: 'Пустой ответ модели' }, 502)
-
-    const quest = validateQuest(JSON.parse(text))
-    if (!quest) return json({ error: 'Ответ не соответствует схеме квеста' }, 502)
-
-    return json(quest)
-  } catch (cause) {
-    console.error('Генерация не удалась:', cause)
-    return json({ error: 'Генерация недоступна' }, 502)
   }
+
+  console.error('Генерация не удалась:', failures)
+  return json({ error: 'Модель недоступна', details: failures }, 502)
 })
