@@ -106,28 +106,6 @@ async function loadProfile (userId: string): Promise<User | null> {
   }
 }
 
-/**
- * Стрик ежедневного входа (ЧТЗ 5.12.3): при первом за сутки открытии
- * приложения счётчик растёт, при пропущенном дне обнуляется, потолок — 14.
- */
-async function touchStreak (profile: User) {
-  const client = supabase!
-  const today = new Date().toISOString().slice(0, 10)
-
-  const { error } = await client.from('streak_log').insert({ user_id: profile.id, login_date: today })
-  if (error) return                               // уже отмечались сегодня
-
-  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
-  const { data: previous } = await client
-    .from('streak_log').select('login_date')
-    .eq('user_id', profile.id).eq('login_date', yesterday).maybeSingle()
-
-  const streak = previous ? Math.min(profile.streakDays + 1, 14) : 1
-  await client.from('app_user')
-    .update({ streak_days: streak, last_login_date: today })
-    .eq('id', profile.id)
-}
-
 export function AuthProvider ({ children }: { children: ReactNode }) {
   const [sessionReady, setSessionReady] = useState(!isLive)
   const [profileReady, setProfileReady] = useState(!isLive)
@@ -173,12 +151,6 @@ export function AuthProvider ({ children }: { children: ReactNode }) {
       if (cancelled) return
       setProfile(loaded)
       setProfileReady(true)
-
-      if (loaded) {
-        touchStreak(loaded)
-          .then(() => loadProfile(userId))
-          .then((updated) => { if (!cancelled && updated) setProfile(updated) })
-      }
     }).catch(() => {
       if (!cancelled) setProfileReady(true)
     })

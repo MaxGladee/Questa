@@ -397,6 +397,101 @@ export async function finishEvent (eventId: string, organizerId: string): Promis
   if (error) throw error
 }
 
+// ───────────────── ежедневная награда за вход подряд ──────────────────
+
+const DAY_MS = 86_400_000
+
+/** Сколько QP даёт день серии (ЧТЗ 5.12.3): от 10 в первый до 75 к концу. */
+export function streakReward (day: number): number {
+  return Math.min(10 + 5 * (day - 1), 75)
+}
+
+export interface DailyReward {
+  /** Текущая длина серии — сколько дней подряд награда уже забрана. */
+  streak: number
+  /** День серии, который засчитается, если забрать награду сейчас. */
+  day: number
+  amount: number
+  canClaim: boolean
+  /** Когда награда откроется снова. */
+  nextAt: string | null
+  /** Когда серия оборвётся, если не прийти. */
+  breaksAt: string | null
+}
+
+/**
+ * Состояние награды. Серия не растёт от самого факта открытия приложения:
+ * награду нужно забрать. Не забрал двое суток — серия начинается заново,
+ * и это единственное, что делает её ценной.
+ */
+export async function getDailyReward (userId: string): Promise<DailyReward> {
+  const now = Date.now()
+
+  const state = isLive
+    ? await (async () => {
+        const { data } = await db().from('app_user')
+          .select('streak_days, last_reward_at').eq('id', userId).maybeSingle()
+        return {
+          streak: data?.streak_days ?? 0,
+          last: data?.last_reward_at ? new Date(data.last_reward_at).getTime() : null,
+        }
+      })()
+    : demoReward
+
+  const canClaim = state.last === null || now - state.last >= DAY_MS
+  const broken = state.last === null || now - state.last > 2 * DAY_MS
+  const day = broken ? 1 : Math.min(state.streak + (canClaim ? 1 : 0), 14)
+
+  return {
+    streak: state.streak,
+    day,
+    amount: streakReward(day),
+    canClaim,
+    nextAt: state.last === null ? null : new Date(state.last + DAY_MS).toISOString(),
+    breaksAt: state.last === null ? null : new Date(state.last + 2 * DAY_MS).toISOString(),
+  }
+}
+
+/** Состояние награды в демонстрационном режиме — в памяти вкладки. */
+const demoReward = { streak: 0, last: null as number | null }
+
+export async function claimDailyReward (userId: string): Promise<{ day: number; amount: number }> {
+  const state = await getDailyReward(userId)
+  if (!state.canClaim) throw new Error('Награда уже получена — приходите завтра')
+
+  const now = new Date()
+
+  if (!isLive) {
+    demoReward.streak = state.day
+    demoReward.last = now.getTime()
+    return { day: state.day, amount: state.amount }
+  }
+
+  const client = db()
+
+  // Ключ по дате делает начисление неповторимым: даже если запрос уйдёт
+  // дважды, очки начислятся один раз.
+  const { error } = await client.from('qp_transaction').insert({
+    user_id: userId, amount: state.amount, reason: 'streak',
+    event_key: `streak:${userId}:${now.toISOString().slice(0, 10)}`,
+  })
+  if (error && !error.message.includes('duplicate key')) throw error
+
+  const { error: saved } = await client.from('app_user').update({
+    streak_days: state.day,
+    last_reward_at: now.toISOString(),
+    last_login_date: now.toISOString().slice(0, 10),
+  }).eq('id', userId)
+  if (saved) throw saved
+
+  // История входов — на будущее, для статистики; сбой здесь ничего не ломает.
+  await client.from('streak_log')
+    .insert({ user_id: userId, login_date: now.toISOString().slice(0, 10) })
+    .then(undefined, () => {})
+
+  return { day: state.day, amount: state.amount }
+}
+
 // ──────────────────────────── жалобы ─────────────────────────────────
 
 /**

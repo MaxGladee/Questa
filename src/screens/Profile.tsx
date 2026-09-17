@@ -5,9 +5,10 @@ import { Empty, Loading } from '../components/States'
 import { ChevronIcon, GearIcon } from '../components/icons'
 import { Cover } from '../components/Art'
 import { levelFromExp, levelProgress } from '../data/demo'
-import { listEvents } from '../lib/api'
+import { listEvents, streakReward } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
+import { DailyRewardCard } from '../components/DailyReward'
 
 function Stat (
   { value, label, badge, tone }:
@@ -72,10 +73,15 @@ export default function Profile () {
           <Progress value={current / next} />
         </section>
 
+        <DailyRewardCard />
+
         <section className="space-y-3">
           <h2 className="text-[20px]">Статистика</h2>
           <div className="no-scrollbar -mx-5 flex gap-3 overflow-x-auto px-5">
-            <Stat value={profile.streakDays} label="Дней подряд" badge="+10 QP" tone="bright" />
+            <Stat
+              value={profile.streakDays} label="Дней подряд"
+              badge={`+${streakReward(Math.max(profile.streakDays, 1))} QP`} tone="bright"
+            />
             <Stat value={profile.eventsAttended} label="Посещено" tone="dim" />
             <Stat value={profile.eventsHosted} label="Проведено" tone="dim" />
           </div>
