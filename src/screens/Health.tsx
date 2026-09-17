@@ -137,7 +137,59 @@ export default function Health () {
             : message)
     }
 
-    // 4. Чат в реальном времени.
+    // 4. Какие файлы SQL уже выполнены.
+    //
+    // Проверяется не догадками по косвенным признакам: каждый файл
+    // оставляет о себе строку в schema_note.
+    const NEEDED = [
+      { key: '003_chat_triggers', title: '003 — чат и системные сообщения' },
+      { key: '004_results_and_ratings', title: '004 — итоги и оценки' },
+    ]
+
+    try {
+      const { data, error } = await client.from('schema_note').select('key')
+      if (error) throw error
+
+      const applied = new Set((data ?? []).map((row) => row.key))
+      const missing = NEEDED.filter((item) => !applied.has(item.key))
+
+      add('migrations', 'Файлы SQL',
+          missing.length === 0 ? 'ok' : 'warn',
+          missing.length === 0
+            ? 'все выполнены: 003 и 004'
+            : `не выполнены: ${missing.map((item) => item.title).join(', ')}`)
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause)
+      // Нет самой таблицы отметок — значит не выполнялся ни один из файлов.
+      add('migrations', 'Файлы SQL',
+          signedIn ? 'warn' : 'idle',
+          signedIn
+            ? 'ни 003, ни 004 ещё не выполнены — чат не откроется сам, '
+              + 'системные сообщения и средний рейтинг работать не будут'
+            : `не проверялось: ${message}`)
+    }
+
+    // 5. Функция полного удаления аккаунта.
+    //
+    // Запрос идёт методом OPTIONS: он только спрашивает, есть ли функция по
+    // этому адресу, и ничего не удаляет.
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-account`,
+        { method: 'OPTIONS' },
+      )
+
+      add('delete-account', 'Функция удаления аккаунта',
+          response.ok ? 'ok' : 'warn',
+          response.ok
+            ? 'развёрнута: аккаунт удаляется полностью'
+            : `не развёрнута (${response.status}): аккаунт будет только отключаться`)
+    } catch {
+      add('delete-account', 'Функция удаления аккаунта', 'warn',
+          'не отвечает: аккаунт будет только отключаться')
+    }
+
+    // 6. Чат в реальном времени.
     try {
       const channel = client.channel('health-check')
       const state = await new Promise<string>((resolve) => {

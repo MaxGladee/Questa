@@ -162,3 +162,22 @@ drop trigger if exists announce_event_change_after_update on event;
 create trigger announce_event_change_after_update
 after update on event
 for each row execute function announce_event_change();
+
+-- ─────────────── отметка о выполнении для самопроверки ───────────────
+--
+-- Страница #/health не может заглянуть в список функций базы, поэтому
+-- каждый файл оставляет здесь строку о себе. По ней видно, что именно
+-- уже применено, и не приходится гадать, почему чат молчит.
+
+create table if not exists schema_note (
+  key        text primary key,
+  applied_at timestamptz not null default now()
+);
+
+alter table schema_note enable row level security;
+
+drop policy if exists read_schema_notes on schema_note;
+create policy read_schema_notes on schema_note for select to authenticated using (true);
+
+insert into schema_note (key) values ('004_results_and_ratings')
+on conflict (key) do update set applied_at = now();
