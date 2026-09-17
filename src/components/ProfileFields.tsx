@@ -20,7 +20,7 @@ export function NicknameField (
       <span className="text-[15px] text-muted">Никнейм</span>
       <div className="flex gap-2">
         <Field
-          placeholder="Никнейм" maxLength={20} className="flex-1"
+          placeholder="Никнейм" maxLength={20} className="flex-1" autoComplete="nickname"
           value={value} onChange={(e) => onChange(e.target.value)}
         />
         <button

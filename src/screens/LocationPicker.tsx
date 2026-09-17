@@ -123,6 +123,7 @@ export default function LocationPicker (
         <label className="flex items-center gap-2 rounded-field bg-field px-4 py-3">
           <SearchIcon className="size-5 shrink-0 text-muted" />
           <input
+            type="search" autoComplete="off" data-1p-ignore data-lpignore="true"
             value={query} onChange={(e) => setQuery(e.target.value)}
             placeholder="Найти место" aria-label="Найти место"
             className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-muted"

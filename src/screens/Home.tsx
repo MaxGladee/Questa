@@ -95,6 +95,7 @@ export default function Home () {
           <label className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl bg-surface px-3.5 py-3">
             <SearchIcon className="size-5 text-muted" />
             <input
+              type="search" autoComplete="off" data-1p-ignore data-lpignore="true"
               value={query} onChange={(e) => setQuery(e.target.value)}
               placeholder="Поиск" aria-label="Поиск ивента"
               className="min-w-0 flex-1 bg-transparent text-[17px] outline-none placeholder:text-muted"

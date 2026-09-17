@@ -28,9 +28,24 @@ export function Button (
   )
 }
 
+/**
+ * Браузер по умолчанию считает безымянное текстовое поле формой входа и
+ * подставляет туда почту. Поэтому автозаполнение выключено, пока поле само
+ * не скажет, что в нём лежит: `autoComplete` из props перекрывает умолчание.
+ */
+const noAutofill = {
+  autoComplete: 'off',
+  autoCorrect: 'off',
+  spellCheck: false,
+  'data-1p-ignore': true,        // 1Password
+  'data-lpignore': 'true',       // LastPass
+  'data-form-type': 'other',     // Dashlane
+} as const
+
 export function Field ({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
+      {...noAutofill}
       {...rest}
       className={cx(
         'w-full rounded-field bg-field px-5 py-4 text-[17px] text-white',
@@ -44,6 +59,7 @@ export function Field ({ className, ...rest }: InputHTMLAttributes<HTMLInputElem
 export function TextArea ({ className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
+      {...noAutofill}
       {...rest}
       className={cx(
         'w-full resize-none rounded-field bg-field px-5 py-4 text-[17px] text-white',
@@ -79,6 +95,8 @@ export function Card ({ children, className }: { children: ReactNode; className?
 }
 
 /** Аватар: фотография, а при её отсутствии — первая буква имени. */
+export { noAutofill }
+
 export function Avatar (
   { name, src, size = 44, className }:
   { name: string; src?: string; size?: number; className?: string },

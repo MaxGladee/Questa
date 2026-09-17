@@ -56,6 +56,7 @@ export default function Confirm () {
             value={digit}
             onChange={(e) => setDigit(index, e.target.value)}
             inputMode="numeric" maxLength={1} aria-label={`Цифра ${index + 1}`}
+            autoComplete={index === 0 ? 'one-time-code' : 'off'}
             className="size-12 rounded-2xl bg-field text-center text-[24px] font-semibold
                        outline-none focus:ring-2 focus:ring-accent"
           />

@@ -21,6 +21,7 @@ export function CityField (
         <span className="text-[15px] text-muted">Город</span>
         <input
           autoFocus placeholder="Введите город" value={value}
+          autoComplete="address-level2" data-1p-ignore data-lpignore="true"
           onChange={(event) => onChange(event.target.value)}
           onBlur={() => { if (!value.trim()) setTyping(false) }}
           className="w-full rounded-field bg-field px-5 py-4 text-[17px] text-white

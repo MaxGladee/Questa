@@ -146,6 +146,7 @@ export default function Chat () {
         <label className="flex flex-1 items-center gap-3 rounded-full bg-[#312B4B] px-4 py-3.5">
           <ClipIcon className="size-6 text-muted" />
           <input
+            autoComplete="off" data-1p-ignore data-lpignore="true"
             value={draft} onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && send()}
             placeholder="Начните писать..." maxLength={500} aria-label="Сообщение"

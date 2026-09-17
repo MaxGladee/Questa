@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from './ui'
 import { CloseIcon, SearchIcon } from './icons'
+import { noAutofill } from './ui'
 
 export interface Option {
   value: string
@@ -82,6 +83,7 @@ export function Sheet (
           <label className="mx-5 mb-2 flex items-center gap-2 rounded-field bg-field px-4 py-3">
             <SearchIcon className="size-5 shrink-0 text-muted" />
             <input
+              {...noAutofill} type="search"
               value={query} onChange={(event) => setQuery(event.target.value)}
               placeholder="Поиск" aria-label="Поиск по списку"
               className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-muted"
