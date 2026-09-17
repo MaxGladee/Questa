@@ -119,3 +119,23 @@ export function Progress ({ value, className }: { value: number; className?: str
     </div>
   )
 }
+
+/** Переключатель «включено / выключено». */
+export function Switch (
+  { checked, onChange, label }:
+  { checked: boolean; onChange: (value: boolean) => void; label: string },
+) {
+  return (
+    <button
+      role="switch" aria-checked={checked} aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={`flex h-8 w-14 shrink-0 items-center rounded-full p-1 transition
+                  ${checked ? 'bg-accent' : 'bg-white/15'}`}
+    >
+      <span
+        className={`size-6 rounded-full bg-white transition-transform
+                    ${checked ? 'translate-x-6' : 'translate-x-0'}`}
+      />
+    </button>
+  )
+}

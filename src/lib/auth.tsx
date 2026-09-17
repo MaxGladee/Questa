@@ -6,6 +6,7 @@ import { db, isLive, supabase } from './supabase'
 import { ME, type CategoryCode, type User } from '../data/demo'
 
 interface AuthValue {
+  /** Сессия и профиль загружены — до этого момента судить о входе рано. */
   ready: boolean
   session: Session | null
   profile: User | null
@@ -15,6 +16,9 @@ interface AuthValue {
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
   createProfile: (input: { nickname: string; city: string; interests: CategoryCode[] }) => Promise<void>
+  updateProfile: (input: { nickname: string; city: string; interests: CategoryCode[] }) => Promise<void>
+  changePassword: (current: string, next: string) => Promise<void>
+  deleteAccount: () => Promise<void>
   refreshProfile: () => Promise<void>
 }
 
@@ -92,7 +96,8 @@ async function touchStreak (profile: User) {
 }
 
 export function AuthProvider ({ children }: { children: ReactNode }) {
-  const [ready, setReady] = useState(!isLive)
+  const [sessionReady, setSessionReady] = useState(!isLive)
+  const [profileReady, setProfileReady] = useState(!isLive)
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<User | null>(isLive ? null : ME)
 
@@ -102,36 +107,54 @@ export function AuthProvider ({ children }: { children: ReactNode }) {
 
     client.auth.getSession().then(({ data }) => {
       setSession(data.session)
-      setReady(true)
+      setSessionReady(true)
     })
 
     const { data: listener } = client.auth.onAuthStateChange((_event, next) => {
       setSession(next)
+      setSessionReady(true)
     })
 
     return () => listener.subscription.unsubscribe()
   }, [])
 
   // Профиль подтягивается под текущую сессию и отмечает вход в стрике.
+  //
+  // Пока он грузится, приложение не должно решать, заполнен профиль или нет:
+  // именно из-за преждевременного вывода после перезагрузки страницы
+  // пользователя раз за разом уводило на экран создания профиля.
   useEffect(() => {
     if (!isLive) return
+
     const userId = session?.user.id
-    if (!userId) return setProfile(null)
+    if (!userId) {
+      setProfile(null)
+      setProfileReady(sessionReady)
+      return
+    }
 
     let cancelled = false
+    setProfileReady(false)
+
     loadProfile(userId).then((loaded) => {
       if (cancelled) return
       setProfile(loaded)
-      if (loaded) touchStreak(loaded).then(() => loadProfile(userId)).then((updated) => {
-        if (!cancelled && updated) setProfile(updated)
-      })
+      setProfileReady(true)
+
+      if (loaded) {
+        touchStreak(loaded)
+          .then(() => loadProfile(userId))
+          .then((updated) => { if (!cancelled && updated) setProfile(updated) })
+      }
+    }).catch(() => {
+      if (!cancelled) setProfileReady(true)
     })
 
     return () => { cancelled = true }
-  }, [session?.user.id])
+  }, [session?.user.id, sessionReady])
 
   const value = useMemo<AuthValue>(() => ({
-    ready,
+    ready: sessionReady && profileReady,
     session,
     profile,
 
@@ -175,10 +198,59 @@ export function AuthProvider ({ children }: { children: ReactNode }) {
       setProfile(await loadProfile(user.id))
     },
 
+    async updateProfile ({ nickname, city, interests }) {
+      const client = db()
+      if (!profile) throw new Error('Нет профиля')
+
+      const { error } = await client.from('app_user')
+        .update({ nickname, city }).eq('id', profile.id)
+      if (error) throw error
+
+      // Интересы проще переписать целиком, чем вычислять разницу.
+      await client.from('user_interest').delete().eq('user_id', profile.id)
+
+      const { data: rows } = await client.from('interest').select('id, code').in('code', interests)
+      if (rows?.length) {
+        await client.from('user_interest')
+          .insert(rows.map((row) => ({ user_id: profile.id, interest_id: row.id })))
+      }
+
+      setProfile(await loadProfile(profile.id))
+    },
+
+    async changePassword (current, next) {
+      const client = db()
+      const email = session?.user.email
+      if (!email) throw new Error('Нет активной сессии')
+
+      // Supabase меняет пароль без проверки старого, поэтому сверяем сами.
+      const { error: wrong } = await client.auth.signInWithPassword({ email, password: current })
+      if (wrong) throw new Error('Текущий пароль указан неверно')
+
+      const { error } = await client.auth.updateUser({ password: next })
+      if (error) throw error
+    },
+
+    /**
+     * Удаление аккаунта (ЧТЗ 5.1.5). Запись помечается удалённой и пропадает
+     * из приложения; окончательное стирание данных происходит на стороне
+     * сервера в срок до 30 дней, как требует ТЗ 4.1.5.
+     */
+    async deleteAccount () {
+      const client = db()
+      if (!profile) return
+
+      await client.from('app_user')
+        .update({ deleted_at: new Date().toISOString() }).eq('id', profile.id)
+
+      await client.auth.signOut()
+      setProfile(null)
+    },
+
     async refreshProfile () {
       if (session?.user.id) setProfile(await loadProfile(session.user.id))
     },
-  }), [ready, session, profile])
+  }), [sessionReady, profileReady, session, profile])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

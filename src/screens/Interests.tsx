@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { Button, Field } from '../components/ui'
 import { CATEGORIES, type CategoryCode } from '../data/demo'
 import { useAuth } from '../lib/auth'
@@ -7,7 +7,7 @@ import { useAuth } from '../lib/auth'
 /** Никнейм, город и интересы — шаг 5 регистрации (ЧТЗ 5.1.1). */
 export default function Interests () {
   const navigate = useNavigate()
-  const { createProfile } = useAuth()
+  const { createProfile, profile, ready } = useAuth()
   const [nickname, setNickname] = useState('')
   const [city, setCity] = useState('')
   const [chosen, setChosen] = useState<CategoryCode[]>([])
@@ -31,6 +31,9 @@ export default function Interests () {
 
   const toggle = (code: CategoryCode) =>
     setChosen((list) => (list.includes(code) ? list.filter((c) => c !== code) : [...list, code]))
+
+  // Профиль уже заполнен — например, страницу просто перезагрузили.
+  if (ready && profile) return <Navigate to="/" replace />
 
   return (
     <div className="flex h-full flex-col gap-6 px-6 pb-8 pt-10">

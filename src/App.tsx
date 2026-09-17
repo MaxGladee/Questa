@@ -18,6 +18,7 @@ import EventDetails from './screens/EventDetails'
 import Chat from './screens/Chat'
 import Quest from './screens/Quest'
 import CreateEvent from './screens/CreateEvent'
+import Settings from './screens/Settings'
 
 /**
  * Экраны за входом. Без сессии уводим на приветствие, с сессией но без
@@ -49,6 +50,7 @@ function Router () {
       <Route path="/events"  element={<RequireAuth><Events /></RequireAuth>} />
       <Route path="/map"     element={<RequireAuth><MapScreen /></RequireAuth>} />
       <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
+      <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
 
       <Route path="/create"          element={<RequireAuth><CreateEvent /></RequireAuth>} />
       <Route path="/event/:id"       element={<RequireAuth><EventDetails /></RequireAuth>} />

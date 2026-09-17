@@ -35,12 +35,19 @@ export default function Onboarding () {
         Пропустить
       </button>
 
-      <div className="flex flex-1 flex-col items-center justify-center gap-8">
-        <img
-          src={`${import.meta.env.BASE_URL}art/${slide.art}`}
-          alt="" width={465} height={488}
-          className="w-full max-w-[320px] rounded-[32px]"
-        />
+      {/*
+        Высоты заданы жёстко, а не подстраиваются под содержимое: иначе при
+        переключении слайдов картинка и текст прыгают, потому что заголовки
+        и описания занимают разное число строк.
+      */}
+      <div className="flex flex-1 flex-col items-center justify-center gap-7">
+        <div className="flex h-[320px] w-full max-w-[320px] items-center justify-center">
+          <img
+            src={`${import.meta.env.BASE_URL}art/${slide.art}`}
+            alt="" width={465} height={488}
+            className="max-h-full w-auto rounded-[32px]"
+          />
+        </div>
 
         <div className="flex gap-2">
           {SLIDES.map((_, index) => (
@@ -52,8 +59,8 @@ export default function Onboarding () {
           ))}
         </div>
 
-        <div className="space-y-3 text-center">
-          <h1 className="text-[32px] leading-tight">{slide.title}</h1>
+        <div className="flex h-[160px] flex-col items-center gap-3 text-center">
+          <h1 className="text-[30px] leading-tight">{slide.title}</h1>
           <p className="text-[17px] leading-snug text-white/75">{slide.text}</p>
         </div>
       </div>

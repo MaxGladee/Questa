@@ -77,7 +77,12 @@ export default function MapScreen () {
   return (
     <TabScreen>
       <div className="relative h-full">
-        <div ref={container} className="absolute inset-0 bg-surface" />
+        {/*
+          z-0 на контейнере карты создаёт отдельный контекст наложения:
+          внутренние слои Leaflet со своими z-index 400-700 остаются внутри
+          него и перестают перекрывать фильтры, карточку и нижнюю панель.
+        */}
+        <div ref={container} className="absolute inset-0 z-0 bg-surface" />
 
         <div className="no-scrollbar pointer-events-auto absolute inset-x-0 top-0 z-10 flex gap-2
                         overflow-x-auto px-4 py-3">

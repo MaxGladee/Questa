@@ -1,4 +1,4 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { TabScreen } from '../components/Layout'
 import { Avatar, Progress } from '../components/ui'
 import { Empty, Loading } from '../components/States'
@@ -32,8 +32,7 @@ function Stat (
 }
 
 export default function Profile () {
-  const navigate = useNavigate()
-  const { profile, signOut } = useAuth()
+  const { profile } = useAuth()
   const { data: events, loading } = useAsync(
     () => listEvents(profile?.id ?? null), [profile?.id],
   )
@@ -48,9 +47,9 @@ export default function Profile () {
     <TabScreen>
       <div className="space-y-6 px-5 pt-4">
         <header className="relative flex flex-col items-center">
-          <button aria-label="Настройки" className="absolute right-0 top-2">
+          <Link to="/settings" aria-label="Настройки" className="absolute right-0 top-2">
             <GearIcon className="size-7" />
-          </button>
+          </Link>
 
           <div className="relative">
             <Avatar name={profile.nickname} src={profile.avatarUrl} size={130} className="rounded-[28px]" />
@@ -107,12 +106,12 @@ export default function Profile () {
           ))}
         </section>
 
-        <button
-          onClick={() => signOut().then(() => navigate('/start'))}
-          className="w-full rounded-card bg-surface-2 py-4 text-center text-[17px] text-muted"
+        <Link
+          to="/settings"
+          className="block rounded-card bg-surface-2 py-4 text-center text-[17px] text-muted"
         >
-          Выйти
-        </button>
+          Настройки
+        </Link>
       </div>
     </TabScreen>
   )
