@@ -353,6 +353,7 @@ export async function getQuest (eventId: string, viewerId: string | null): Promi
       qpReward: task.qp_reward,
       isShared: task.is_shared,
       completed: mine.has(task.id),
+      params: task.params ?? {},
       questions: (task.params?.questions ?? []).map((item: Row) => ({
         question: item.question,
         options: item.options,

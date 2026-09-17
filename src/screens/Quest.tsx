@@ -11,6 +11,7 @@ import { checkIn, completeTask, getEvent, getQuest } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
 import Quiz from './Quiz'
+import GeoTask from './GeoTask'
 
 const TASK_ICON = {
   photo: CameraIcon,
@@ -24,6 +25,7 @@ export default function Quest () {
   const navigate = useNavigate()
   const { profile, refreshProfile } = useAuth()
   const [quizTask, setQuizTask] = useState<QuestTask | null>(null)
+  const [geoTask, setGeoTask] = useState<QuestTask | null>(null)
   const [busy, setBusy] = useState(false)
 
   const { data: event } = useAsync(() => getEvent(id!, profile?.id ?? null), [id, profile?.id])
@@ -136,6 +138,7 @@ export default function Quest () {
                 key={task.id} disabled={busy || task.completed}
                 onClick={() => {
                   if (task.type === 'quiz') return setQuizTask(task)
+                  if (task.type === 'geolocation') return setGeoTask(task)
                   finish(task, task.qpReward)
                 }}
                 className={`flex w-full items-center gap-4 rounded-card p-4 text-left transition
@@ -179,6 +182,18 @@ export default function Quest () {
           })}
         </section>
       </div>
+
+      {geoTask && event && (
+        <GeoTask
+          task={geoTask}
+          target={[
+            geoTask.params?.target_latitude ?? event.lat,
+            geoTask.params?.target_longitude ?? event.lng,
+          ]}
+          onClose={() => setGeoTask(null)}
+          onDone={() => { finish(geoTask, geoTask.qpReward); setGeoTask(null) }}
+        />
+      )}
 
       {quizTask && (
         <Quiz

@@ -47,6 +47,14 @@ export interface QuestTask {
   isShared: boolean
   completed: boolean
   questions?: { question: string; options: string[]; correctIndex: number }[]
+  /** Параметры задания: цель и радиус для геолокации, подсказка для фото. */
+  params?: {
+    target_latitude?: number
+    target_longitude?: number
+    radius_meters?: number
+    duration_seconds?: number
+    prompt?: string
+  }
 }
 
 export interface Quest {
@@ -140,6 +148,7 @@ const karaokeQuest: Quest = {
     {
       id: 'k2', position: 2, type: 'geolocation', qpReward: 100, isShared: false, completed: false,
       title: 'Гео-трекинг', description: 'Провести в караоке 2 часа',
+      params: { radius_meters: 50, duration_seconds: 120 },
     },
     {
       id: 'k3', position: 3, type: 'quiz', qpReward: 50, isShared: true, completed: false,
