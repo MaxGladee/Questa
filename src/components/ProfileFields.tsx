@@ -1,5 +1,7 @@
+import { useRef, useState } from 'react'
 import { Avatar, Field } from './ui'
 import { randomAvatar, randomNickname } from './Art'
+import { uploadImage } from '../lib/api'
 
 // Города по численности населения; Екатеринбург первым — приложение делается
 // для него, и на защите демонстрация идёт именно по нему.
@@ -33,25 +35,56 @@ export function NicknameField (
   )
 }
 
-/** Аватар: пока загрузка фотографии не подключена, его можно перебирать. */
+/** Аватар: своя фотография либо сгенерированный, который можно перебирать. */
 export function AvatarPicker (
-  { name, value, onChange }:
-  { name: string; value?: string; onChange: (value: string) => void },
+  { name, value, userId, onChange }:
+  { name: string; value?: string; userId?: string; onChange: (value: string) => void },
 ) {
+  const input = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function upload (file: File | undefined) {
+    if (!file || !userId) return
+    setBusy(true)
+    setError('')
+    try {
+      onChange(await uploadImage(file, userId, 'avatar'))
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось загрузить')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
-    <div className="flex items-center gap-4">
-      <Avatar name={name || '?'} src={value} size={72} className="rounded-3xl" />
-      <div className="min-w-0 flex-1">
-        <button
-          type="button" onClick={() => onChange(randomAvatar())}
-          className="rounded-full bg-field px-4 py-2.5 text-[15px] font-semibold active:scale-95"
-        >
-          {value ? 'Другой аватар' : 'Выбрать аватар'}
-        </button>
-        <p className="mt-1.5 text-[13px] leading-snug text-muted">
-          Загрузка своей фотографии появится позже
-        </p>
+    <div className="space-y-2">
+      <div className="flex items-center gap-4">
+        <Avatar name={name || '?'} src={value} size={72} className="rounded-3xl" />
+
+        <div className="flex min-w-0 flex-1 flex-wrap gap-2">
+          <button
+            type="button" disabled={busy || !userId} onClick={() => input.current?.click()}
+            className="rounded-full bg-accent px-4 py-2.5 text-[15px] font-semibold
+                       active:scale-95 disabled:opacity-40"
+          >
+            {busy ? 'Загружаем…' : 'Загрузить фото'}
+          </button>
+          <button
+            type="button" onClick={() => onChange(randomAvatar())}
+            className="rounded-full bg-field px-4 py-2.5 text-[15px] font-semibold active:scale-95"
+          >
+            Случайный
+          </button>
+        </div>
       </div>
+
+      <input
+        ref={input} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+        onChange={(e) => upload(e.target.files?.[0])}
+      />
+
+      {error && <p className="text-[14px] text-red-400">{error}</p>}
     </div>
   )
 }

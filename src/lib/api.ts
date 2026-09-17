@@ -91,6 +91,7 @@ export interface NewEvent {
   maxParticipants: number
   category: CategoryCode
   chatMode: 'auto' | 'manual'
+  coverUrl?: string
   /** Интересы организатора — часть контекста, который уходит в модель. */
   interests?: string[]
 }
@@ -121,6 +122,7 @@ export async function createEvent (input: NewEvent, organizerId: string): Promis
     organizer_id: organizerId,
     title: input.title,
     description: input.description || null,
+    cover_url: input.coverUrl ?? null,
     category_id: category!.id,
     address: input.address,
     lat: input.lat,
@@ -640,4 +642,53 @@ export async function geocode (address: string): Promise<[number, number]> {
   } catch {
     return CITY_CENTER
   }
+}
+
+/** Координаты → адрес. Нужен, когда точку ставят пальцем на карте. */
+export async function reverseGeocode (lat: number, lng: number): Promise<string> {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=18`,
+      { headers: { 'Accept-Language': 'ru' } },
+    )
+    if (!response.ok) return ''
+
+    const found = await response.json()
+    const place = found?.address ?? {}
+    const street = [place.road, place.house_number].filter(Boolean).join(', ')
+
+    return street || found?.display_name?.split(',').slice(0, 2).join(',') || ''
+  } catch {
+    return ''
+  }
+}
+
+// ───────────────────────── загрузка фотографий ──────────────────────────
+
+/**
+ * Кладёт снимок в хранилище и возвращает ссылку на него.
+ *
+ * Каждый пользователь пишет в свою папку — так устроены правила доступа в
+ * supabase/002_photos_and_interests.sql: подменить чужой аватар нельзя.
+ */
+export async function uploadImage (file: File, userId: string, kind: 'avatar' | 'cover'): Promise<string> {
+  if (!isLive) throw new Error('Загрузка недоступна без базы')
+
+  if (file.size > 5 * 1024 * 1024) throw new Error('Файл больше 5 МБ')
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    throw new Error('Подойдёт JPEG, PNG или WebP')
+  }
+
+  const client = db()
+  const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+  const path = `${userId}/${kind}-${Date.now()}.${extension}`
+
+  const { error } = await client.storage.from('media').upload(path, file, { upsert: true })
+  if (error) {
+    throw new Error(error.message.includes('Bucket not found')
+      ? 'Хранилище ещё не настроено'
+      : 'Не удалось загрузить снимок')
+  }
+
+  return client.storage.from('media').getPublicUrl(path).data.publicUrl
 }

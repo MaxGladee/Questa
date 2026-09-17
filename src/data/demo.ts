@@ -5,6 +5,42 @@ export type CategoryCode = 'party' | 'chill' | 'bar' | 'walk' | 'boardgames' | '
 export type EventStatus = 'active' | 'in_progress' | 'finished' | 'cancelled'
 export type TaskType = 'geolocation' | 'photo' | 'quiz'
 
+/**
+ * Интересы профиля. Первые шесть совпадают с категориями ивента (ЧТЗ 5.5),
+ * остальные существуют только в профиле: по ним подбираются рекомендации и
+ * строится контекст для генерации квеста. Список повторяет справочник из
+ * supabase/002_photos_and_interests.sql.
+ */
+export const INTERESTS: { code: string; title: string }[] = [
+  { code: 'party', title: 'Тусовка' },
+  { code: 'chill', title: 'Чилл' },
+  { code: 'bar', title: 'Бар' },
+  { code: 'walk', title: 'Прогулка' },
+  { code: 'boardgames', title: 'Настолки' },
+  { code: 'other', title: 'Другое' },
+  { code: 'sport', title: 'Спорт' },
+  { code: 'run', title: 'Бег' },
+  { code: 'bike', title: 'Велосипед' },
+  { code: 'yoga', title: 'Йога' },
+  { code: 'music', title: 'Музыка' },
+  { code: 'cinema', title: 'Кино' },
+  { code: 'books', title: 'Книги' },
+  { code: 'food', title: 'Еда' },
+  { code: 'coffee', title: 'Кофе' },
+  { code: 'travel', title: 'Путешествия' },
+  { code: 'photo', title: 'Фотография' },
+  { code: 'art', title: 'Искусство' },
+  { code: 'dance', title: 'Танцы' },
+  { code: 'it', title: 'Айти' },
+  { code: 'languages', title: 'Языки' },
+  { code: 'animals', title: 'Животные' },
+  { code: 'quiz', title: 'Квизы' },
+  { code: 'anime', title: 'Аниме' },
+  { code: 'volunteer', title: 'Волонтёрство' },
+  { code: 'theatre', title: 'Театр' },
+]
+
+/** Категории ивента — только эти шесть, как требует ЧТЗ. */
 export const CATEGORIES: { code: CategoryCode; title: string }[] = [
   { code: 'party', title: 'Тусовка' },
   { code: 'chill', title: 'Чилл' },
@@ -25,7 +61,7 @@ export interface User {
   averageRating: number
   eventsAttended: number
   eventsHosted: number
-  interests: CategoryCode[]
+  interests: string[]
 }
 
 export interface Participant {

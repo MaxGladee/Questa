@@ -36,21 +36,39 @@ function BottomNav () {
  * показывается колонкой в 390 точек — ширина макета в Figma.
  */
 export function PhoneFrame ({ children }: { children: ReactNode }) {
+  // Отступы под «чёлку» и нижнюю полосу жестов: приложение открывается на
+  // весь экран, и без них содержимое уезжает под системные элементы.
   return (
-    <div className="mx-auto flex h-full w-full max-w-[420px] flex-col bg-bg
-                    shadow-[0_0_80px_-20px_rgb(135_105_255/0.35)]">
+    <div
+      className="mx-auto flex h-full w-full max-w-[420px] flex-col bg-bg
+                 shadow-[0_0_80px_-20px_rgb(135_105_255/0.35)]"
+      style={{
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}
+    >
       {children}
     </div>
   )
 }
 
-/** Экран с нижней навигацией. */
-export function TabScreen ({ children }: { children: ReactNode }) {
+/**
+ * Экран с нижней навигацией. Карта просит `fullBleed`: ей нужна вся площадь
+ * под панель, иначе под навигацией остаётся полоса пустого фона.
+ */
+export function TabScreen (
+  { children, fullBleed = false }: { children: ReactNode; fullBleed?: boolean },
+) {
   const { pathname } = useLocation()
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden">
-      <div key={pathname} className="no-scrollbar flex-1 overflow-y-auto pb-28">
+      <div
+        key={pathname}
+        className={fullBleed
+          ? 'min-h-0 flex-1'
+          : 'no-scrollbar flex-1 overflow-y-auto pb-28'}
+      >
         {children}
       </div>
       <BottomNav />

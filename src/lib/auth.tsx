@@ -3,7 +3,7 @@ import {
 } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { db, isLive, supabase } from './supabase'
-import { ME, type CategoryCode, type User } from '../data/demo'
+import { ME, type User } from '../data/demo'
 
 interface AuthValue {
   /** Сессия и профиль загружены — до этого момента судить о входе рано. */
@@ -25,7 +25,7 @@ interface AuthValue {
 interface ProfileInput {
   nickname: string
   city: string
-  interests: CategoryCode[]
+  interests: string[]
   avatarUrl?: string
 }
 
@@ -74,7 +74,7 @@ async function loadProfile (userId: string): Promise<User | null> {
       const list = Array.isArray(related) ? related : [related]
       return list.flatMap((entry) => {
         const code = (entry as { code?: string } | null)?.code
-        return code ? [code as CategoryCode] : []
+        return code ? [code] : []
       })
     }),
   }

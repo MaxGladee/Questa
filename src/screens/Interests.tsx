@@ -3,16 +3,16 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui'
 import { AvatarPicker, CityPicker, NicknameField } from '../components/ProfileFields'
 import { randomAvatar } from '../components/Art'
-import { CATEGORIES, type CategoryCode } from '../data/demo'
+import { INTERESTS } from '../data/demo'
 import { useAuth } from '../lib/auth'
 
 /** Никнейм, город и интересы — шаг 5 регистрации (ЧТЗ 5.1.1). */
 export default function Interests () {
   const navigate = useNavigate()
-  const { createProfile, profile, ready } = useAuth()
+  const { createProfile, profile, ready, session } = useAuth()
   const [nickname, setNickname] = useState('')
   const [city, setCity] = useState('')
-  const [chosen, setChosen] = useState<CategoryCode[]>([])
+  const [chosen, setChosen] = useState<string[]>([])
   const [avatar, setAvatar] = useState(randomAvatar)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -34,7 +34,7 @@ export default function Interests () {
     }
   }
 
-  const toggle = (code: CategoryCode) =>
+  const toggle = (code: string) =>
     setChosen((list) => (list.includes(code) ? list.filter((c) => c !== code) : [...list, code]))
 
   // Профиль уже заполнен — например, страницу просто перезагрузили.
@@ -48,7 +48,9 @@ export default function Interests () {
       </div>
 
       <div className="space-y-5">
-        <AvatarPicker name={nickname} value={avatar} onChange={setAvatar} />
+        <AvatarPicker
+          name={nickname} value={avatar} userId={session?.user.id} onChange={setAvatar}
+        />
         <NicknameField value={nickname} onChange={(value) => { setNickname(value); setError('') }} />
         <CityPicker value={city} onChange={setCity} />
       </div>
@@ -56,7 +58,7 @@ export default function Interests () {
       <div className="space-y-3">
         <h2 className="text-[20px]">Интересы</h2>
         <div className="flex flex-wrap gap-2.5">
-          {CATEGORIES.map(({ code, title }) => (
+          {INTERESTS.map(({ code, title }) => (
             <button
               key={code} onClick={() => toggle(code)}
               className={`rounded-2xl px-5 py-3 text-[16px] font-medium transition ${

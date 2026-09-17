@@ -5,7 +5,7 @@ import { Button, Field, Switch } from '../components/ui'
 import { AvatarPicker, CityPicker, NicknameField } from '../components/ProfileFields'
 import { Loading } from '../components/States'
 import { BackIcon } from '../components/icons'
-import { CATEGORIES, type CategoryCode } from '../data/demo'
+import { INTERESTS } from '../data/demo'
 import { useAuth } from '../lib/auth'
 
 // Типы уведомлений из таблицы в ЧТЗ 5.16. Выбор хранится на самом устройстве:
@@ -45,7 +45,7 @@ export default function Settings () {
 
   const [nickname, setNickname] = useState('')
   const [city, setCity] = useState('')
-  const [interests, setInterests] = useState<CategoryCode[]>([])
+  const [interests, setInterests] = useState<string[]>([])
   const [avatar, setAvatar] = useState<string | undefined>()
   const [saved, setSaved] = useState(false)
   const [profileError, setProfileError] = useState('')
@@ -69,7 +69,7 @@ export default function Settings () {
 
   if (!profile) return <PlainScreen title="Настройки"><Loading /></PlainScreen>
 
-  const toggleInterest = (code: CategoryCode) =>
+  const toggleInterest = (code: string) =>
     setInterests((list) => list.includes(code)
       ? list.filter((item) => item !== code)
       : [...list, code])
@@ -136,7 +136,7 @@ export default function Settings () {
     >
       <div className="space-y-8 px-5 pb-12 pt-2">
         <Section title="Профиль">
-          <AvatarPicker name={nickname} value={avatar} onChange={setAvatar} />
+          <AvatarPicker name={nickname} value={avatar} userId={profile.id} onChange={setAvatar} />
           <NicknameField
             value={nickname}
             onChange={(value) => { setNickname(value); setProfileError('') }}
@@ -145,7 +145,7 @@ export default function Settings () {
 
           <p className="pt-1 text-[15px] text-muted">Интересы</p>
           <div className="flex flex-wrap gap-2.5">
-            {CATEGORIES.map(({ code, title }) => (
+            {INTERESTS.map(({ code, title }) => (
               <button
                 key={code} onClick={() => toggleInterest(code)}
                 className={`rounded-2xl px-4 py-2.5 text-[16px] transition ${

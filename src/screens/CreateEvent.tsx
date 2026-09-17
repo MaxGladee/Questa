@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Button, Field, TextArea } from '../components/ui'
-import { CalendarIcon, CameraIcon, ClockIcon, CloseIcon } from '../components/icons'
+import { CalendarIcon, CameraIcon, ClockIcon, CloseIcon, PinIcon } from '../components/icons'
+import LocationPicker from './LocationPicker'
 import { CATEGORIES, type CategoryCode } from '../data/demo'
 import type { Idea } from '../data/ideas'
-import { createEvent, geocode } from '../lib/api'
+import { createEvent, uploadImage } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
 /** Создание ивента (ЧТЗ 5.5). Состав полей и ограничения — из таблицы формы. */
@@ -19,7 +20,24 @@ export default function CreateEvent () {
 
   const [title, setTitle] = useState(idea?.title ?? '')
   const [description, setDescription] = useState(idea?.description ?? '')
-  const [address, setAddress] = useState('')
+  const [place, setPlace] = useState<{ address: string; lat: number; lng: number } | null>(null)
+  const [pickingPlace, setPickingPlace] = useState(false)
+  const [cover, setCover] = useState<string>()
+  const [coverBusy, setCoverBusy] = useState(false)
+  const coverInput = useRef<HTMLInputElement>(null)
+
+  async function uploadCover (file: File | undefined) {
+    if (!file || !profile) return
+    setCoverBusy(true)
+    setError('')
+    try {
+      setCover(await uploadImage(file, profile.id, 'cover'))
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось загрузить обложку')
+    } finally {
+      setCoverBusy(false)
+    }
+  }
   const [date, setDate] = useState('')
   const [time, setTime] = useState(idea ? `${String(idea.hour).padStart(2, '0')}:00` : '')
   const [min, setMin] = useState(idea ? String(idea.participants[0]) : '')
@@ -32,7 +50,7 @@ export default function CreateEvent () {
 
   async function submit () {
     if (title.trim().length < 3) return setError('Название — от 3 до 50 символов')
-    if (!address.trim()) return setError('Укажите место встречи')
+    if (!place) return setError('Выберите место встречи')
     if (!date || !time) return setError('Укажите дату и время')
 
     const from = Number(min)
@@ -53,12 +71,13 @@ export default function CreateEvent () {
     setError('')
     setBusy(true)
     try {
-      const [lat, lng] = await geocode(address.trim())
       const id = await createEvent({
         title: title.trim(),
         description: description.trim(),
-        address: address.trim(),
-        lat, lng,
+        address: place.address,
+        lat: place.lat,
+        lng: place.lng,
+        coverUrl: cover,
         startsAt: startsAt.toISOString(),
         minParticipants: from,
         maxParticipants: to,
@@ -124,21 +143,43 @@ export default function CreateEvent () {
           />
         </label>
 
-        <button className="flex w-full items-center gap-4 rounded-card border border-dashed
-                           border-white/30 p-3 text-left">
-          <span className="grid size-[76px] place-items-center rounded-2xl bg-field">
-            <CameraIcon className="size-8 text-accent" />
+        <button
+          onClick={() => coverInput.current?.click()} disabled={coverBusy}
+          className="flex w-full items-center gap-4 rounded-card border border-dashed
+                     border-white/30 p-3 text-left"
+        >
+          {cover ? (
+            <img src={cover} alt="" className="size-[76px] shrink-0 rounded-2xl object-cover" />
+          ) : (
+            <span className="grid size-[76px] shrink-0 place-items-center rounded-2xl bg-field">
+              <CameraIcon className="size-8 text-accent" />
+            </span>
+          )}
+          <span className="text-[17px] leading-snug">
+            {coverBusy ? 'Загружаем…' : cover ? 'Обложка загружена. Заменить?' : 'Загрузите обложку ивента'}
           </span>
-          <span className="text-[18px] leading-snug">Загрузите<br />обложку ивента</span>
         </button>
 
-        <label className="block space-y-2">
+        <input
+          ref={coverInput} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+          onChange={(e) => uploadCover(e.target.files?.[0])}
+        />
+
+        {/* Место выбирается на карте или из списка, а не набирается руками:
+            ивенту нужны координаты, а не строка. */}
+        <div className="space-y-2">
           <span className="text-[17px]">Место</span>
-          <Field
-            placeholder="Укажите локацию"
-            value={address} onChange={(e) => setAddress(e.target.value)}
-          />
-        </label>
+          <button
+            onClick={() => setPickingPlace(true)}
+            className="flex w-full items-center gap-3 rounded-field bg-field px-4 py-4 text-left"
+          >
+            <PinIcon className={`size-6 shrink-0 ${place ? 'text-accent' : 'text-muted'}`} />
+            <span className={`min-w-0 flex-1 truncate text-[17px] ${
+              place ? '' : 'text-muted'}`}>
+              {place?.address ?? 'Выбрать место на карте'}
+            </span>
+          </button>
+        </div>
 
         <div className="space-y-2">
           <span className="text-[17px]">Дата и время</span>
@@ -221,6 +262,14 @@ export default function CreateEvent () {
           {busy ? 'Придумываем квест…' : 'Создать ивент'}
         </Button>
       </div>
+
+      {pickingPlace && (
+        <LocationPicker
+          initial={place ?? undefined}
+          onClose={() => setPickingPlace(false)}
+          onPick={(chosen) => { setPlace(chosen); setPickingPlace(false); setError('') }}
+        />
+      )}
     </div>
   )
 }
