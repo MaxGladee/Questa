@@ -13,6 +13,7 @@ import { useAuth } from '../lib/auth'
 import { useCountUp } from '../lib/useCountUp'
 import Quiz from './Quiz'
 import GeoTask from './GeoTask'
+import PhotoTask from './PhotoTask'
 
 const TASK_ICON = {
   photo: CameraIcon,
@@ -27,6 +28,7 @@ export default function Quest () {
   const { profile, refreshProfile } = useAuth()
   const [quizTask, setQuizTask] = useState<QuestTask | null>(null)
   const [geoTask, setGeoTask] = useState<QuestTask | null>(null)
+  const [photoTask, setPhotoTask] = useState<QuestTask | null>(null)
   const [busy, setBusy] = useState(false)
 
   const { data: event } = useAsync(() => getEvent(id!, profile?.id ?? null), [id, profile?.id])
@@ -60,12 +62,15 @@ export default function Quest () {
 
   const myPlace = Math.max(1, board.findIndex((person) => person.id === myId) + 1)
 
-  async function finish (task: QuestTask, qpAwarded: number, answer?: unknown) {
+  async function finish (
+    task: QuestTask, qpAwarded: number, answer?: unknown, photoUrl?: string,
+  ) {
     if (!profile || !id) return
     setBusy(true)
     try {
       await completeTask({
-        eventId: id, task, userId: profile.id, nickname: profile.nickname, qpAwarded, answer,
+        eventId: id, task, userId: profile.id, nickname: profile.nickname,
+        qpAwarded, answer, photoUrl,
       })
       await refreshProfile()
       reload()
@@ -143,6 +148,7 @@ export default function Quest () {
                 onClick={() => {
                   if (task.type === 'quiz') return setQuizTask(task)
                   if (task.type === 'geolocation') return setGeoTask(task)
+                  if (task.type === 'photo') return setPhotoTask(task)
                   finish(task, task.qpReward)
                 }}
                 className={`flex w-full items-center gap-4 rounded-card p-4 text-left transition
@@ -204,6 +210,18 @@ export default function Quest () {
           ]}
           onClose={() => setGeoTask(null)}
           onDone={() => { finish(geoTask, geoTask.qpReward); setGeoTask(null) }}
+        />
+      )}
+
+      {photoTask && profile && (
+        <PhotoTask
+          task={photoTask}
+          userId={profile.id}
+          onClose={() => setPhotoTask(null)}
+          onDone={(photoUrl) => {
+            finish(photoTask, photoTask.qpReward, undefined, photoUrl)
+            setPhotoTask(null)
+          }}
         />
       )}
 

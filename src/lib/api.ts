@@ -15,7 +15,7 @@ type Row = Record<string, any>
  * базы в этом режиме нет, но пройти квест и увидеть, как растут очки, должно
  * быть можно — иначе страховочный режим бесполезен для показа.
  */
-const demoCompleted = new Map<string, number>([['k1', 30]])
+const demoCompleted = new Map<string, number>()
 
 const EVENT_QUERY = `
   id, title, description, cover_url, address, lat, lng, starts_at,
@@ -776,4 +776,41 @@ export async function uploadImage (file: File, userId: string, kind: 'avatar' | 
   }
 
   return client.storage.from('media').getPublicUrl(path).data.publicUrl
+}
+
+// ───────────────────────── проверка фотографии ──────────────────────────
+
+export interface PhotoVerdict {
+  /** Засчитано ли задание. */
+  ok: boolean
+  /** Что увидела модель — показывается человеку, если не засчитано. */
+  reason: string
+  /** Проверка не состоялась: модель недоступна или ещё не умеет этого. */
+  skipped: boolean
+}
+
+/**
+ * Проверка снимка моделью (ТЗ 4.2.6, этап 2).
+ *
+ * Отказ проверки не равен отказу в задании: по ЧТЗ 3.3 в MVP фотография
+ * засчитывается по факту загрузки. Поэтому, если модель недоступна или ещё
+ * не умеет проверять снимки, задание засчитывается — и это отмечается в
+ * ответе, чтобы человек понимал, что произошло.
+ */
+export async function verifyPhoto (prompt: string, base64: string): Promise<PhotoVerdict> {
+  if (!isLive) return { ok: true, reason: '', skipped: true }
+
+  try {
+    const { data, error } = await db().functions.invoke('generate-quest', {
+      body: { kind: 'photo', prompt, image: base64 },
+    })
+
+    if (error || typeof data?.ok !== 'boolean') {
+      return { ok: true, reason: '', skipped: true }
+    }
+
+    return { ok: data.ok, reason: String(data.reason ?? ''), skipped: false }
+  } catch {
+    return { ok: true, reason: '', skipped: true }
+  }
 }

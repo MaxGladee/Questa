@@ -187,8 +187,9 @@ const karaokeQuest: Quest = {
   source: 'ai',
   tasks: [
     {
-      id: 'k1', position: 1, type: 'photo', qpReward: 30, isShared: false, completed: true,
+      id: 'k1', position: 1, type: 'photo', qpReward: 30, isShared: false, completed: false,
       title: 'Поймать кадр', description: 'Селфи с Басковым',
+      params: { prompt: 'Селфи на фоне сцены караоке' },
     },
     {
       id: 'k2', position: 2, type: 'geolocation', qpReward: 100, isShared: false, completed: false,

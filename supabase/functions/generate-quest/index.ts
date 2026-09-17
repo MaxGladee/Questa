@@ -42,6 +42,48 @@ const CATEGORY_TITLES: Record<string, string> = {
   other: 'Другое',
 }
 
+// Функция отвечает на два вида запросов: придумать квест и посмотреть на
+// снимок. Отдельная функция под проверку фотографий потребовала бы ещё
+// одного развёртывания вручную, а работа та же — сходить в модель.
+interface PhotoRequest {
+  kind: 'photo'
+  prompt: string
+  /** Снимок строкой; клиент заранее уменьшает его до 1280 точек. */
+  image: string
+}
+
+const PHOTO_SCHEMA = {
+  type: 'object',
+  required: ['ok', 'reason'],
+  properties: {
+    ok: { type: 'boolean' },
+    reason: { type: 'string' },
+  },
+}
+
+/**
+ * Проверяющий промпт намеренно снисходительный. Задание выполняет человек,
+ * который стоит на месте и видит больше, чем помещается в кадр; строгая
+ * проверка отвергала бы правильные снимки из-за темноты и ракурса.
+ */
+function photoPrompt (task: string): string {
+  return `Человек выполняет задание в приложении для встреч и прислал снимок.
+
+Задание звучало так: «${task}»
+
+Реши, похоже ли, что человек действительно его выполнил.
+
+Как судить:
+- Будь снисходителен. Засчитывай, если снимок правдоподобно относится к
+  заданию, даже если он тёмный, смазанный, снят сбоку или издалека.
+- Не требуй художественного качества и точного кадрирования.
+- Не засчитывай только явное несоответствие: снимок совсем о другом, скриншот,
+  картинка из интернета, пустая стена вместо предмета.
+- В поле reason напиши одно короткое предложение по-русски, обращаясь на «ты».
+  Если засчитано — что видно на снимке. Если нет — чего не хватает, чтобы
+  человек понял, что переснять.`
+}
+
 interface QuestContext {
   title: string
   description?: string
@@ -183,6 +225,51 @@ function validateQuest (raw: unknown) {
   return { title: quest.title.trim(), tasks: checked }
 }
 
+/** Взгляд модели на снимок. Отказ проверки разбирает уже клиент. */
+async function checkPhoto (
+  { prompt, image }: PhotoRequest,
+  apiKey: string,
+  json: (body: unknown, status?: number) => Response,
+): Promise<Response> {
+  const body = JSON.stringify({
+    contents: [{
+      parts: [
+        { text: photoPrompt(prompt) },
+        { inlineData: { mimeType: 'image/jpeg', data: image } },
+      ],
+    }],
+    generationConfig: {
+      temperature: 0.2,
+      responseMimeType: 'application/json',
+      responseSchema: PHOTO_SCHEMA,
+    },
+  })
+
+  for (const model of MODELS) {
+    try {
+      const response = await fetch(`${ENDPOINT}/${model}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body,
+      })
+      if (!response.ok) continue
+
+      const data = await response.json()
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
+      if (typeof text !== 'string') continue
+
+      const verdict = JSON.parse(text)
+      if (typeof verdict?.ok !== 'boolean') continue
+
+      return json({ ok: verdict.ok, reason: String(verdict.reason ?? ''), model })
+    } catch {
+      // пробуем следующую модель
+    }
+  }
+
+  return json({ error: 'Проверка недоступна' }, 502)
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
@@ -195,12 +282,22 @@ Deno.serve(async (request) => {
   const apiKey = Deno.env.get('GEMINI_API_KEY')
   if (!apiKey) return json({ error: 'Ключ модели не настроен' }, 503)
 
-  let ctx: QuestContext
+  let payload: QuestContext | PhotoRequest
   try {
-    ctx = await request.json()
+    payload = await request.json()
   } catch {
     return json({ error: 'Некорректный запрос' }, 400)
   }
+
+  if ((payload as PhotoRequest)?.kind === 'photo') {
+    const request = payload as PhotoRequest
+    if (!request.prompt || !request.image) {
+      return json({ error: 'Не хватает снимка или задания' }, 400)
+    }
+    return await checkPhoto(request, apiKey, json)
+  }
+
+  const ctx = payload as QuestContext
 
   if (!ctx?.title || !ctx?.category || !ctx?.address) {
     return json({ error: 'Не хватает контекста ивента' }, 400)
