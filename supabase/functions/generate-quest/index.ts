@@ -42,6 +42,49 @@ const CATEGORY_TITLES: Record<string, string> = {
   other: 'Другое',
 }
 
+// Функция отвечает на два вида запросов. Отдельная функция под никнеймы
+// потребовала бы ещё одного развёртывания вручную, а работа та же: сходить
+// в модель и проверить ответ.
+interface NicknameRequest {
+  kind: 'nicknames'
+  count?: number
+}
+
+const NICKNAME_SCHEMA = {
+  type: 'object',
+  required: ['nicknames'],
+  properties: {
+    nicknames: { type: 'array', items: { type: 'string' } },
+  },
+}
+
+const NICKNAME_PROMPT = `Придумай смешные русские никнеймы для приложения, где
+люди собираются на короткие офлайн-встречи.
+
+Правила:
+- Каждый никнейм — одно слово без пробелов, от 4 до 18 символов, кириллицей.
+- Составляй из неожиданных пар: прилагательное плюс предмет или зверь.
+  Например: ХмурыйПельмень, БодрыйКактус, ВежливыйБарсук.
+- Можно добавить в конец две цифры, но не чаще чем к трети имён.
+- Должно быть добродушно и самоиронично: никнейм выбирают про себя.
+- Ничего обидного, грубого, про внешность, политику, алкоголь и вещества.
+- Все имена в ответе разные.`
+
+/** Проверка ответа: имена нужного вида, без повторов и мусора. */
+function validateNicknames (raw: unknown, count: number): string[] | null {
+  const list = (raw as { nicknames?: unknown })?.nicknames
+  if (!Array.isArray(list)) return null
+
+  const clean = [...new Set(
+    list
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => item.trim().replace(/\s+/g, ''))
+      .filter((item) => /^[А-Яа-яЁё][А-Яа-яЁё]{2,17}\d{0,2}$/.test(item)),
+  )]
+
+  return clean.length >= Math.min(5, count) ? clean.slice(0, count) : null
+}
+
 interface QuestContext {
   title: string
   description?: string
@@ -183,6 +226,44 @@ function validateQuest (raw: unknown) {
   return { title: quest.title.trim(), tasks: checked }
 }
 
+/** Пачка никнеймов за один заход: перебирать их по одному дорого и медленно. */
+async function makeNicknames (
+  count: number,
+  apiKey: string,
+  json: (body: unknown, status?: number) => Response,
+): Promise<Response> {
+  const body = JSON.stringify({
+    contents: [{ parts: [{ text: `${NICKNAME_PROMPT}\n\nПридумай ровно ${count} штук.` }] }],
+    generationConfig: {
+      temperature: 1.3,
+      responseMimeType: 'application/json',
+      responseSchema: NICKNAME_SCHEMA,
+    },
+  })
+
+  for (const model of MODELS) {
+    try {
+      const response = await fetch(`${ENDPOINT}/${model}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body,
+      })
+      if (!response.ok) continue
+
+      const data = await response.json()
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
+      if (typeof text !== 'string') continue
+
+      const nicknames = validateNicknames(JSON.parse(text), count)
+      if (nicknames) return json({ nicknames, model })
+    } catch {
+      // пробуем следующую модель
+    }
+  }
+
+  return json({ error: 'Не удалось придумать никнеймы' }, 502)
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
@@ -195,13 +276,18 @@ Deno.serve(async (request) => {
   const apiKey = Deno.env.get('GEMINI_API_KEY')
   if (!apiKey) return json({ error: 'Ключ модели не настроен' }, 503)
 
-  let ctx: QuestContext
+  let payload: QuestContext | NicknameRequest
   try {
-    ctx = await request.json()
+    payload = await request.json()
   } catch {
     return json({ error: 'Некорректный запрос' }, 400)
   }
 
+  if ((payload as NicknameRequest)?.kind === 'nicknames') {
+    return await makeNicknames((payload as NicknameRequest).count ?? 20, apiKey, json)
+  }
+
+  const ctx = payload as QuestContext
   if (!ctx?.title || !ctx?.category || !ctx?.address) {
     return json({ error: 'Не хватает контекста ивента' }, 400)
   }

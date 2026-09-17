@@ -39,32 +39,7 @@ export function Cover (
 
 // ─────────────────────── случайные аватары и ники ───────────────────────
 
-const AVATAR_EMOJI = [
-  '🦊', '🐼', '🦉', '🐙', '🦄', '🐸', '🦁', '🐺', '🦝', '🐳',
-  '🦀', '🐝', '🦖', '🐢', '🦩', '🐨', '🦔', '🐬', '🦚', '🐯',
-]
-
-const AVATAR_GRADIENTS = [
-  ['#7C3AED', '#DB2777'], ['#0891B2', '#4F46E5'], ['#B45309', '#DB2777'],
-  ['#0F766E', '#7C3AED'], ['#4338CA', '#0891B2'], ['#9333EA', '#F59E0B'],
-]
-
-/**
- * Сгенерированный аватар хранится строкой вида `gen:🦊:2`, а не картинкой:
- * так он не занимает места в хранилище и одинаково выглядит у всех.
- */
-export function randomAvatar (): string {
-  const emoji = AVATAR_EMOJI[Math.floor(Math.random() * AVATAR_EMOJI.length)]
-  const palette = Math.floor(Math.random() * AVATAR_GRADIENTS.length)
-  return `gen:${emoji}:${palette}`
-}
-
-export function parseGeneratedAvatar (value?: string) {
-  if (!value?.startsWith('gen:')) return null
-  const [, emoji, index] = value.split(':')
-  const [from, to] = AVATAR_GRADIENTS[Number(index) % AVATAR_GRADIENTS.length]
-  return { emoji, from, to }
-}
+export { randomAvatarSeed as randomAvatar } from './avatar-art'
 
 const NICK_ADJECTIVES = [
   'Ленивый', 'Дерзкий', 'Уютный', 'Полуночный', 'Бодрый', 'Загадочный',

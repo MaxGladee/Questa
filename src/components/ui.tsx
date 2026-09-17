@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes, TextareaHTMLAttributes } from 'react'
-import { parseGeneratedAvatar } from './Art'
+import { parseAvatarSeed } from './avatar-art'
+import { GeneratedAvatar } from './GeneratedAvatar'
 
 const cx = (...parts: (string | false | undefined)[]) => parts.filter(Boolean).join(' ')
 
@@ -128,18 +129,15 @@ export function Avatar (
   // Свой radius в className должен побеждать круглую форму по умолчанию.
   const shape = className?.includes('rounded') ? '' : 'rounded-full'
 
-  const generated = parseGeneratedAvatar(src)
-  if (generated) {
+  const seed = parseAvatarSeed(src)
+  if (seed) {
     return (
       <span
-        style={{
-          ...style,
-          fontSize: size * 0.55,
-          background: `linear-gradient(135deg, ${generated.from}, ${generated.to})`,
-        }}
-        className={cx('grid shrink-0 place-items-center', shape || 'rounded-full', className)}
+        style={style}
+        className={cx('grid shrink-0 place-items-center overflow-hidden',
+          shape || 'rounded-full', className)}
       >
-        {generated.emoji}
+        <GeneratedAvatar seed={seed} size={size} />
       </span>
     )
   }
