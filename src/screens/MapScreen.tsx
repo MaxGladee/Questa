@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { addMapTiles } from '../lib/map'
+import { addMapTiles, eventPin } from '../lib/map'
 import { TabScreen } from '../components/Layout'
 import { Cover } from '../components/Art'
 import {
@@ -20,21 +20,6 @@ import { useAuth } from '../lib/auth'
 // платного ключа и заявки, поэтому в прототипе подключён бесплатный источник
 // тайлов. Замена провайдера затрагивает только этот файл.
 const CENTER: [number, number] = [56.8389, 60.6057]   // Екатеринбург
-
-const ICON_EMOJI: Record<CategoryCode, string> = {
-  party: '🎉', chill: '🌿', bar: '🍸', walk: '🚶', boardgames: '🎲', other: '✨',
-}
-
-function marker (emoji: string) {
-  return L.divIcon({
-    className: '',
-    html: `<span style="display:grid;place-items:center;width:38px;height:38px;
-                        border-radius:999px;background:#8769FF;border:2px solid #fff;
-                        font-size:18px;box-shadow:0 4px 12px rgb(0 0 0 / .45)">${emoji}</span>`,
-    iconSize: [38, 38],
-    iconAnchor: [19, 19],
-  })
-}
 
 export default function MapScreen () {
   const { profile } = useAuth()
@@ -95,13 +80,21 @@ export default function MapScreen () {
     )
 
     for (const event of shown) {
-      L.marker([event.lat, event.lng], { icon: marker(ICON_EMOJI[event.category]) })
+      L.marker([event.lat, event.lng], {
+        icon: eventPin({
+          cover: event.coverUrl,
+          category: event.category,
+          selected: event.id === selected,
+        }),
+        // Выбранная метка поднимается над соседними, иначе её перекрывают.
+        zIndexOffset: event.id === selected ? 1000 : 0,
+      })
         .addTo(layer)
         .on('click', () => setSelected(event.id))
     }
 
     return () => { layer.remove() }
-  }, [categories, events])
+  }, [categories, events, selected])
 
   const toggle = (code: CategoryCode) =>
     setCategories((list) =>

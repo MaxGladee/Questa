@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { addMapTiles } from '../lib/map'
+import { addMapTiles, eventPin } from '../lib/map'
 import { Button, Field, useAutofillGuard } from '../components/ui'
 import { CloseIcon, PinIcon, SearchIcon } from '../components/icons'
 import { VENUES, type Venue } from '../data/venues'
@@ -35,14 +35,7 @@ export default function LocationPicker (
   const [lookingUp, setLookingUp] = useState(false)
   const guard = useAutofillGuard()
 
-  const pin = L.divIcon({
-    className: '',
-    html: `<span style="display:grid;place-items:center;width:34px;height:34px;
-                        border-radius:999px;background:#8769FF;border:3px solid #fff;
-                        box-shadow:0 4px 14px rgb(0 0 0 / .5)"></span>`,
-    iconSize: [34, 34],
-    iconAnchor: [17, 17],
-  })
+  const pin = eventPin({ category: 'other' })
 
   useEffect(() => {
     if (!container.current || map.current) return
