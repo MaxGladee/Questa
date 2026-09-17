@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { addMapTiles } from '../lib/map'
 import { Button } from '../components/ui'
 import { CloseIcon, GeoTaskIcon } from '../components/icons'
 import { distanceMeters, formatDistance, formatDuration } from '../lib/geo'
@@ -47,12 +48,11 @@ export default function GeoTask (
     if (!container.current || map.current) return
 
     map.current = L.map(container.current, {
-      zoomControl: false, attributionControl: false, dragging: false,
+      zoomControl: false, dragging: false,
       scrollWheelZoom: false, doubleClickZoom: false,
     }).setView(target, 16)
 
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 })
-      .addTo(map.current)
+    addMapTiles(map.current)
 
     L.circle(target, {
       radius, color: '#8769FF', weight: 2, fillColor: '#8769FF', fillOpacity: 0.18,

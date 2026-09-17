@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { addMapTiles } from '../lib/map'
 import { Button, Field, useAutofillGuard } from '../components/ui'
 import { CloseIcon, PinIcon, SearchIcon } from '../components/icons'
 import { VENUES, type Venue } from '../data/venues'
@@ -46,11 +47,10 @@ export default function LocationPicker (
   useEffect(() => {
     if (!container.current || map.current) return
 
-    map.current = L.map(container.current, { zoomControl: false, attributionControl: false })
+    map.current = L.map(container.current, { zoomControl: false })
       .setView(point, 14)
 
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 })
-      .addTo(map.current)
+    addMapTiles(map.current)
 
     marker.current = L.marker(point, { icon: pin }).addTo(map.current)
 

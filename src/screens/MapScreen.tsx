@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { addMapTiles } from '../lib/map'
 import { TabScreen } from '../components/Layout'
 import { Cover } from '../components/Art'
 import {
@@ -51,11 +52,10 @@ export default function MapScreen () {
   useEffect(() => {
     if (!container.current || map.current) return
 
-    map.current = L.map(container.current, { zoomControl: false, attributionControl: false })
+    map.current = L.map(container.current, { zoomControl: false })
       .setView(CENTER, 12)
 
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 })
-      .addTo(map.current)
+    addMapTiles(map.current)
 
     return () => { map.current?.remove(); map.current = null }
   }, [])
