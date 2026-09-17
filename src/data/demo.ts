@@ -69,7 +69,7 @@ export interface QuestaEvent {
   id: string
   title: string
   description: string
-  coverUrl: string
+  coverUrl?: string
   category: CategoryCode
   address: string
   lat: number

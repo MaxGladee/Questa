@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PlainScreen } from '../components/Layout'
 import { Button, Field, Switch } from '../components/ui'
+import { AvatarPicker, CityPicker, NicknameField } from '../components/ProfileFields'
 import { Loading } from '../components/States'
 import { BackIcon } from '../components/icons'
 import { CATEGORIES, type CategoryCode } from '../data/demo'
@@ -45,6 +46,7 @@ export default function Settings () {
   const [nickname, setNickname] = useState('')
   const [city, setCity] = useState('')
   const [interests, setInterests] = useState<CategoryCode[]>([])
+  const [avatar, setAvatar] = useState<string | undefined>()
   const [saved, setSaved] = useState(false)
   const [profileError, setProfileError] = useState('')
   const [savingProfile, setSavingProfile] = useState(false)
@@ -62,6 +64,7 @@ export default function Settings () {
     setNickname(profile.nickname)
     setCity(profile.city)
     setInterests(profile.interests)
+    setAvatar(profile.avatarUrl)
   }, [profile])
 
   if (!profile) return <PlainScreen title="Настройки"><Loading /></PlainScreen>
@@ -73,6 +76,7 @@ export default function Settings () {
 
   const changed = nickname !== profile.nickname
     || city !== profile.city
+    || avatar !== profile.avatarUrl
     || interests.length !== profile.interests.length
     || interests.some((code) => !profile.interests.includes(code))
 
@@ -84,7 +88,9 @@ export default function Settings () {
     setSavingProfile(true)
     setProfileError('')
     try {
-      await updateProfile({ nickname: nickname.trim(), city: city.trim(), interests })
+      await updateProfile({
+        nickname: nickname.trim(), city: city.trim(), interests, avatarUrl: avatar,
+      })
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     } catch (cause) {
@@ -130,21 +136,12 @@ export default function Settings () {
     >
       <div className="space-y-8 px-5 pb-12 pt-2">
         <Section title="Профиль">
-          <label className="block space-y-2">
-            <span className="text-[15px] text-muted">Никнейм</span>
-            <Field
-              placeholder="Никнейм" maxLength={20}
-              value={nickname} onChange={(e) => { setNickname(e.target.value); setProfileError('') }}
-            />
-          </label>
-
-          <label className="block space-y-2">
-            <span className="text-[15px] text-muted">Город</span>
-            <Field
-              placeholder="Город"
-              value={city} onChange={(e) => { setCity(e.target.value); setProfileError('') }}
-            />
-          </label>
+          <AvatarPicker name={nickname} value={avatar} onChange={setAvatar} />
+          <NicknameField
+            value={nickname}
+            onChange={(value) => { setNickname(value); setProfileError('') }}
+          />
+          <CityPicker value={city} onChange={(value) => { setCity(value); setProfileError('') }} />
 
           <p className="pt-1 text-[15px] text-muted">Интересы</p>
           <div className="flex flex-wrap gap-2.5">

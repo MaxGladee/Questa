@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { Button, Field } from '../components/ui'
+import { Button } from '../components/ui'
+import { AvatarPicker, CityPicker, NicknameField } from '../components/ProfileFields'
+import { randomAvatar } from '../components/Art'
 import { CATEGORIES, type CategoryCode } from '../data/demo'
 import { useAuth } from '../lib/auth'
 
@@ -11,13 +13,16 @@ export default function Interests () {
   const [nickname, setNickname] = useState('')
   const [city, setCity] = useState('')
   const [chosen, setChosen] = useState<CategoryCode[]>([])
+  const [avatar, setAvatar] = useState(randomAvatar)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
   async function submit () {
     setBusy(true)
     try {
-      await createProfile({ nickname: nickname.trim(), city: city.trim(), interests: chosen })
+      await createProfile({
+        nickname: nickname.trim(), city: city.trim(), interests: chosen, avatarUrl: avatar,
+      })
       navigate('/')
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : ''
@@ -42,12 +47,10 @@ export default function Interests () {
         <p className="text-[17px] text-white/75">Расскажите о себе — так подберём ивенты точнее.</p>
       </div>
 
-      <div className="space-y-4">
-        <Field
-          placeholder="Никнейм" value={nickname} maxLength={20}
-          onChange={(e) => setNickname(e.target.value)}
-        />
-        <Field placeholder="Город" value={city} onChange={(e) => setCity(e.target.value)} />
+      <div className="space-y-5">
+        <AvatarPicker name={nickname} value={avatar} onChange={setAvatar} />
+        <NicknameField value={nickname} onChange={(value) => { setNickname(value); setError('') }} />
+        <CityPicker value={city} onChange={setCity} />
       </div>
 
       <div className="space-y-3">

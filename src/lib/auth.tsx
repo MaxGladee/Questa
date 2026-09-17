@@ -15,11 +15,18 @@ interface AuthValue {
   verifyCode: (email: string, code: string) => Promise<void>
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
-  createProfile: (input: { nickname: string; city: string; interests: CategoryCode[] }) => Promise<void>
-  updateProfile: (input: { nickname: string; city: string; interests: CategoryCode[] }) => Promise<void>
+  createProfile: (input: ProfileInput) => Promise<void>
+  updateProfile: (input: ProfileInput) => Promise<void>
   changePassword: (current: string, next: string) => Promise<void>
   deleteAccount: () => Promise<void>
   refreshProfile: () => Promise<void>
+}
+
+interface ProfileInput {
+  nickname: string
+  city: string
+  interests: CategoryCode[]
+  avatarUrl?: string
 }
 
 const AuthContext = createContext<AuthValue | null>(null)
@@ -180,13 +187,13 @@ export function AuthProvider ({ children }: { children: ReactNode }) {
       setProfile(null)
     },
 
-    async createProfile ({ nickname, city, interests }) {
+    async createProfile ({ nickname, city, interests, avatarUrl }) {
       const client = db()
       const user = (await client.auth.getUser()).data.user
       if (!user) throw new Error('Нет активной сессии')
 
       const { error } = await client.from('app_user')
-        .upsert({ id: user.id, email: user.email!, nickname, city })
+        .upsert({ id: user.id, email: user.email!, nickname, city, avatar_url: avatarUrl ?? null })
       if (error) throw error
 
       const { data: rows } = await client.from('interest').select('id, code').in('code', interests)
@@ -198,12 +205,12 @@ export function AuthProvider ({ children }: { children: ReactNode }) {
       setProfile(await loadProfile(user.id))
     },
 
-    async updateProfile ({ nickname, city, interests }) {
+    async updateProfile ({ nickname, city, interests, avatarUrl }) {
       const client = db()
       if (!profile) throw new Error('Нет профиля')
 
       const { error } = await client.from('app_user')
-        .update({ nickname, city }).eq('id', profile.id)
+        .update({ nickname, city, avatar_url: avatarUrl ?? null }).eq('id', profile.id)
       if (error) throw error
 
       // Интересы проще переписать целиком, чем вычислять разницу.

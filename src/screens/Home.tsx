@@ -5,6 +5,9 @@ import { EventListCard } from '../components/EventCard'
 import { Avatar, Progress } from '../components/ui'
 import { Empty, Failed, Loading } from '../components/States'
 import { BellIcon, ChevronIcon, MicIcon, SearchIcon } from '../components/icons'
+import { Cover } from '../components/Art'
+import { ideasForToday } from '../data/ideas'
+import { categoryTitle } from '../data/demo'
 import { useAuth } from '../lib/auth'
 import { countUnread, getQuest, listEvents } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
@@ -70,6 +73,8 @@ export default function Home () {
   const chosenDay = new Date()
   chosenDay.setDate(chosenDay.getDate() + day)
 
+  const ideas = ideasForToday()
+
   const recommended = (events ?? []).filter((event) => {
     if (event.status !== 'active' || event.myRole !== 'guest') return false
     if (!event.title.toLowerCase().includes(query.trim().toLowerCase())) return false
@@ -78,7 +83,7 @@ export default function Home () {
 
   return (
     <TabScreen>
-      <div className="space-y-5 px-5 pt-3">
+      <div className="space-y-4 px-5 pt-3">
         <header className="flex items-center gap-3">
           <Link to="/profile">
             <Avatar
@@ -112,18 +117,18 @@ export default function Home () {
         </header>
 
         {active && (
-          <Link to={`/event/${active.id}/quest`} className="block rounded-card bg-surface p-4">
+          <Link to={`/event/${active.id}/quest`} className="block rounded-card bg-surface p-3.5">
             <div className="flex items-start gap-4">
-              <img
-                src={active.coverUrl} alt="" width={112} height={112}
-                className="size-[72px] shrink-0 rounded-2xl object-cover"
+              <Cover
+                src={active.coverUrl} category={active.category}
+                className="size-16 shrink-0 rounded-2xl" emojiClassName="text-3xl"
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-start gap-2">
-                  <h3 className="min-w-0 flex-1 truncate text-[20px]">{active.title}</h3>
+                  <h3 className="min-w-0 flex-1 truncate text-[18px]">{active.title}</h3>
                   <ChevronIcon className="mt-1 size-5 shrink-0" />
                 </div>
-                <p className="mt-1 line-clamp-2 text-[16px] leading-snug text-muted">
+                <p className="mt-1 line-clamp-2 text-[15px] leading-snug text-muted">
                   {active.description}
                 </p>
               </div>
@@ -141,15 +146,45 @@ export default function Home () {
 
         <DateStrip value={day} onChange={setDay} />
 
-        <section className="space-y-4">
-          <h2 className="text-[28px]">Рекомендации</h2>
+        <section className="space-y-3">
+          <h2 className="text-[24px]">Рекомендации</h2>
 
           {loading && <Loading />}
           {error && <Failed message={error} onRetry={reload} />}
           {!loading && !error && recommended.length === 0 && (
-            <Empty label={query ? 'Ничего не нашлось' : 'На этот день ивентов пока нет'} />
+            <Empty label={query ? 'Ничего не нашлось' : 'На этот день чужих ивентов пока нет'} />
           )}
           {recommended.map((event) => <EventListCard key={event.id} event={event} />)}
+        </section>
+
+        {/* Когда рядом пусто, список идей полезнее пустого места. */}
+        <section className="space-y-3 pb-2">
+          <h2 className="text-[24px]">Идеи для встречи</h2>
+          <p className="-mt-1 text-[15px] leading-snug text-muted">
+            Нажмите — и форма создания заполнится сама, останется выбрать место и время.
+          </p>
+
+          {ideas.map((idea) => (
+            <Link
+              key={idea.title} to="/create" state={{ idea }}
+              className="flex items-center gap-3 rounded-card bg-surface p-3.5 transition
+                         active:scale-[0.99]"
+            >
+              <Cover
+                category={idea.category}
+                className="size-14 shrink-0 rounded-2xl" emojiClassName="text-2xl"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-[17px] font-bold leading-tight">{idea.title}</p>
+                <p className="mt-0.5 line-clamp-2 text-[15px] leading-snug text-muted">
+                  {idea.pitch}
+                </p>
+                <p className="mt-1 text-[13px] text-accent-soft">
+                  {categoryTitle(idea.category)}
+                </p>
+              </div>
+            </Link>
+          ))}
         </section>
       </div>
     </TabScreen>

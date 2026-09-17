@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Button, Field, TextArea } from '../components/ui'
 import { CalendarIcon, CameraIcon, ClockIcon, CloseIcon } from '../components/icons'
 import { CATEGORIES, type CategoryCode } from '../data/demo'
+import type { Idea } from '../data/ideas'
 import { createEvent, geocode } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
@@ -10,14 +11,20 @@ import { useAuth } from '../lib/auth'
 export default function CreateEvent () {
   const navigate = useNavigate()
   const { profile } = useAuth()
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
+
+  // Форма могла быть открыта по готовой идее с главной — тогда поля уже
+  // заполнены, и пользователю остаётся указать место и время.
+  const { state } = useLocation() as { state?: { idea?: Idea } }
+  const idea = state?.idea
+
+  const [title, setTitle] = useState(idea?.title ?? '')
+  const [description, setDescription] = useState(idea?.description ?? '')
   const [address, setAddress] = useState('')
   const [date, setDate] = useState('')
-  const [time, setTime] = useState('')
-  const [min, setMin] = useState('')
-  const [max, setMax] = useState('')
-  const [category, setCategory] = useState<CategoryCode>('party')
+  const [time, setTime] = useState(idea ? `${String(idea.hour).padStart(2, '0')}:00` : '')
+  const [min, setMin] = useState(idea ? String(idea.participants[0]) : '')
+  const [max, setMax] = useState(idea ? String(idea.participants[1]) : '')
+  const [category, setCategory] = useState<CategoryCode>(idea?.category ?? 'party')
   const [chatMode, setChatMode] = useState<'auto' | 'manual'>('auto')
   const [created, setCreated] = useState<string | null>(null)
   const [error, setError] = useState('')

@@ -4,6 +4,7 @@ import { PlainScreen } from '../components/Layout'
 import { Avatar, Button, Chip } from '../components/ui'
 import { Failed, Loading } from '../components/States'
 import { BackIcon, ChevronIcon, PinIcon, StarIcon } from '../components/icons'
+import { Cover } from '../components/Art'
 import { categoryTitle, formatDate, formatTime } from '../data/demo'
 import { getEvent, joinEvent, leaveEvent, openChat } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
@@ -63,9 +64,9 @@ export default function EventDetails () {
     >
       <div className="space-y-4 px-4 pb-8">
         <div className="relative">
-          <img
-            src={event.coverUrl} alt="" width={698} height={420}
-            className="h-56 w-full rounded-[24px] object-cover"
+          <Cover
+            src={event.coverUrl} category={event.category}
+            className="h-56 w-full rounded-[24px]" emojiClassName="text-7xl"
           />
           {event.myRole !== 'guest' && (
             <span className="absolute right-3 top-3 rounded-full bg-green-800/90 px-5 py-2.5
@@ -81,20 +82,20 @@ export default function EventDetails () {
           <Chip tone="accent">{STATUS_LABEL[event.status]}</Chip>
         </div>
 
-        <h1 className="text-[28px]">{event.title}</h1>
+        <h1 className="text-[25px]">{event.title}</h1>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-card bg-surface-2 p-4">
+          <div className="rounded-card bg-surface-2 p-3.5">
             <p className="text-[15px] text-muted">Дата</p>
             <p className="text-[18px] font-semibold">{formatDate(event.startsAt)}</p>
           </div>
-          <div className="rounded-card bg-surface-2 p-4">
+          <div className="rounded-card bg-surface-2 p-3.5">
             <p className="text-[15px] text-muted">Время</p>
             <p className="text-[18px] font-semibold">{formatTime(event.startsAt)}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 rounded-card bg-surface-2 p-4">
+        <div className="flex items-center gap-3 rounded-card bg-surface-2 p-3.5">
           <div className="min-w-0 flex-1">
             <p className="text-[15px] text-muted">Место</p>
             <p className="truncate text-[18px] font-semibold">{event.address}</p>
@@ -104,7 +105,7 @@ export default function EventDetails () {
           </Link>
         </div>
 
-        <div className="rounded-card bg-surface-2 p-4">
+        <div className="rounded-card bg-surface-2 p-3.5">
           <p className="text-[15px] text-muted">
             Участники · {event.participants.length} из {event.maxParticipants}
           </p>
@@ -125,14 +126,14 @@ export default function EventDetails () {
         </div>
 
         {event.description && (
-          <div className="rounded-card bg-surface-2 p-4">
+          <div className="rounded-card bg-surface-2 p-3.5">
             <p className="text-[15px] text-muted">Описание</p>
             <p className="mt-1 text-[17px] leading-snug">{event.description}</p>
           </div>
         )}
 
         {organizer && (
-          <div className="flex items-center gap-3 rounded-card bg-surface-2 p-4">
+          <div className="flex items-center gap-3 rounded-card bg-surface-2 p-3.5">
             <Avatar name={organizer.nickname} src={organizer.avatarUrl} size={52} />
             <div className="min-w-0 flex-1">
               <p className="truncate text-[18px] font-semibold">{organizer.nickname}</p>
@@ -192,7 +193,7 @@ export default function EventDetails () {
           <div className="w-full space-y-4 rounded-[28px] bg-surface p-6">
             <h2 className="text-center text-[24px]">Присоединиться к ивенту?</h2>
 
-            <div className="rounded-card bg-surface-2 p-4">
+            <div className="rounded-card bg-surface-2 p-3.5">
               <p className="text-[19px] font-bold">{event.title}</p>
               <p className="mt-1 text-[16px] text-muted">
                 {formatDate(event.startsAt)}, {formatTime(event.startsAt)} · {event.address}

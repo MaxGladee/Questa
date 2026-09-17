@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { TabScreen } from '../components/Layout'
+import { Cover } from '../components/Art'
 import { CATEGORIES, categoryTitle, formatTime, type CategoryCode, type QuestaEvent } from '../data/demo'
 import { listEvents } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
@@ -104,9 +105,9 @@ export default function MapScreen () {
             className="absolute inset-x-4 bottom-24 z-10 flex items-center gap-3 rounded-card
                        bg-surface p-3 shadow-2xl"
           >
-            <img
-              src={event.coverUrl} alt="" width={96} height={96}
-              className="size-14 shrink-0 rounded-xl object-cover"
+            <Cover
+              src={event.coverUrl} category={event.category}
+              className="size-14 shrink-0 rounded-xl" emojiClassName="text-2xl"
             />
             <div className="min-w-0 flex-1">
               <p className="truncate text-[18px] font-bold">{event.title}</p>

@@ -44,7 +44,7 @@ function toEvent (row: Row, viewerId: string | null): QuestaEvent {
     id: row.id,
     title: row.title,
     description: row.description ?? '',
-    coverUrl: row.cover_url ?? `${import.meta.env.BASE_URL}art/cover-karaoke.jpg`,
+    coverUrl: row.cover_url ?? undefined,
     category: (row.category?.code ?? 'other') as CategoryCode,
     address: row.address,
     lat: row.lat,

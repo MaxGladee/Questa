@@ -19,7 +19,7 @@ export default function Events () {
     <TabScreen>
       <div className="space-y-5 px-5 pt-4">
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-[28px]">Мои ивенты</h1>
+          <h1 className="text-[24px]">Мои ивенты</h1>
           <Link
             to="/create"
             className="btn-primary rounded-full px-5 py-3 text-[16px] font-semibold text-white"
@@ -34,7 +34,7 @@ export default function Events () {
           <Empty label="Вы пока никуда не записались. Создайте свой ивент или загляните в рекомендации." />
         )}
 
-        <div className="space-y-4">
+        <div className="space-y-3">
           {mine.map((event) => <EventListCard key={event.id} event={event} />)}
         </div>
       </div>

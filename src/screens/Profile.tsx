@@ -3,6 +3,7 @@ import { TabScreen } from '../components/Layout'
 import { Avatar, Progress } from '../components/ui'
 import { Empty, Loading } from '../components/States'
 import { ChevronIcon, GearIcon } from '../components/icons'
+import { Cover } from '../components/Art'
 import { levelFromExp, levelProgress } from '../data/demo'
 import { listEvents } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
@@ -59,20 +60,20 @@ export default function Profile () {
             </span>
           </div>
 
-          <h1 className="mt-5 text-[30px]">{profile.nickname}</h1>
+          <h1 className="mt-5 text-[27px]">{profile.nickname}</h1>
           <p className="text-[18px] text-white/80">{profile.city}</p>
         </header>
 
         <section className="space-y-3">
           <div className="flex items-end justify-between">
-            <h2 className="text-[22px]">Уровень {level}</h2>
+            <h2 className="text-[20px]">Уровень {level}</h2>
             <span className="text-[15px] text-muted">{current} / {next}</span>
           </div>
           <Progress value={current / next} />
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-[22px]">Статистика</h2>
+          <h2 className="text-[20px]">Статистика</h2>
           <div className="no-scrollbar -mx-5 flex gap-3 overflow-x-auto px-5">
             <Stat value={profile.streakDays} label="Дней подряд" badge="+10 QP" tone="bright" />
             <Stat value={profile.eventsAttended} label="Посещено" tone="dim" />
@@ -81,24 +82,24 @@ export default function Profile () {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-[22px]">Ачивки</h2>
+          <h2 className="text-[20px]">Ачивки</h2>
           <div className="rounded-card bg-surface-2 px-4 py-6 text-center text-[17px] text-muted">
             Скоро
           </div>
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-[22px]">История</h2>
+          <h2 className="text-[20px]">История</h2>
           {loading && <Loading />}
           {!loading && history.length === 0 && <Empty label="Здесь появятся ваши ивенты" />}
           {history.map((event) => (
             <Link
               key={event.id} to={`/event/${event.id}`}
-              className="flex items-center gap-4 rounded-card bg-surface-3 p-4"
+              className="flex items-center gap-4 rounded-card bg-surface-3 p-3.5"
             >
-              <img
-                src={event.coverUrl} alt="" width={96} height={96}
-                className="size-12 shrink-0 rounded-xl object-cover"
+              <Cover
+                src={event.coverUrl} category={event.category}
+                className="size-12 shrink-0 rounded-xl" emojiClassName="text-2xl"
               />
               <span className="min-w-0 flex-1 truncate text-[17px]">{event.title}</span>
               <ChevronIcon className="size-5 shrink-0 text-muted" />
