@@ -54,29 +54,48 @@ export default function Health () {
     }
 
     const client = db()
+    const signedIn = Boolean(session)
 
-    add('session', 'Вход выполнен', session ? 'ok' : 'warn',
-        session ? (profile?.nickname ?? 'профиль ещё не заполнен') : 'войдите, иначе часть проверок не пройдёт')
+    add('session', 'Вход выполнен', signedIn ? 'ok' : 'fail',
+        signedIn
+          ? (profile?.nickname ?? 'профиль ещё не заполнен')
+          : 'без входа справочники и функция закрыты правилами доступа — остальные проверки бессмысленны')
 
     // 1. Связь с базой и справочник интересов.
+    //
+    // Пустой ответ здесь значит не «таблица пуста», а «правила доступа не
+    // отдали строки»: читать справочники разрешено только вошедшим. Поэтому
+    // ноль строк без входа — это не диагноз, а отсутствие проверки.
     try {
       const { data, error } = await client.from('interest').select('code, is_event_category')
       if (error) throw error
 
-      add('db', 'База отвечает', 'ok', `справочник интересов на месте`)
+      add('db', 'База отвечает', 'ok', 'запрос прошёл без ошибки')
 
       const total = data?.length ?? 0
       const categories = data?.filter((row) => row.is_event_category).length ?? 0
 
-      add('interests', 'Расширенные интересы',
-          total >= 26 ? 'ok' : 'warn',
-          total >= 26
-            ? `${total} интересов, из них ${categories} — категории ивента`
-            : `${total} интересов: файл 002_photos_and_interests.sql ещё не выполнен`)
+      if (!signedIn && total === 0) {
+        add('interests', 'Расширенные интересы', 'idle',
+            'не проверялось: без входа справочник закрыт. Но раз запрос прошёл без ошибки, '
+            + 'столбец is_event_category уже существует — значит файл 002 выполнен')
+      } else {
+        add('interests', 'Расширенные интересы',
+            total >= 26 ? 'ok' : 'warn',
+            total >= 26
+              ? `${total} интересов, из них ${categories} — категории ивента`
+              : `${total} интересов: файл 002_photos_and_interests.sql ещё не выполнен`)
+      }
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause)
-      add('db', 'База отвечает', 'fail', message)
-      add('interests', 'Расширенные интересы', 'fail', 'проверка не выполнялась')
+      const missingColumn = message.includes('is_event_category')
+
+      add('db', 'База отвечает', missingColumn ? 'ok' : 'fail',
+          missingColumn ? 'запрос прошёл, но столбца из файла 002 ещё нет' : message)
+      add('interests', 'Расширенные интересы', missingColumn ? 'warn' : 'fail',
+          missingColumn
+            ? 'файл 002_photos_and_interests.sql ещё не выполнен'
+            : 'проверка не выполнялась')
     }
 
     // 2. Шаблоны квестов — запасной путь, если модель недоступна.
@@ -84,8 +103,14 @@ export default function Health () {
       const { count, error } = await client
         .from('quest_template').select('id', { count: 'exact', head: true })
       if (error) throw error
-      add('templates', 'Шаблоны квестов', (count ?? 0) > 0 ? 'ok' : 'warn',
-          `${count ?? 0} шт. — запасной вариант, если ИИ недоступен`)
+
+      add('templates', 'Шаблоны квестов',
+          (count ?? 0) > 0 ? 'ok' : signedIn ? 'warn' : 'idle',
+          (count ?? 0) > 0
+            ? `${count} шт. — запасной вариант, если ИИ недоступен`
+            : signedIn
+              ? 'ни одного: setup.sql выполнен не полностью'
+              : 'не проверялось: без входа коллекция закрыта')
     } catch {
       add('templates', 'Шаблоны квестов', 'fail', 'не удалось прочитать')
     }
@@ -149,11 +174,13 @@ export default function Health () {
         setAiState({
           key: 'ai', title: 'ИИ-генерация квестов',
           status: 'warn',
-          detail: status === 503
-            ? 'функция работает, но ключ GEMINI_API_KEY не задан в Secrets'
-            : status === 404
-              ? 'функция generate-quest ещё не создана'
-              : `функция ответила ошибкой (${status ?? 'нет кода'}) — квесты будут из шаблонов`,
+          detail: status === 401
+            ? 'нужно войти в приложение: функция отвечает только вошедшим'
+            : status === 503
+              ? 'функция работает, но ключ GEMINI_API_KEY не задан в Secrets'
+              : status === 404
+                ? 'функция generate-quest ещё не создана'
+                : `функция ответила ошибкой (${status ?? 'нет кода'}) — квесты будут из шаблонов`,
         })
         return
       }
@@ -184,6 +211,23 @@ export default function Health () {
       <p className="mt-1 text-[15px] leading-snug text-muted">
         Служебный экран: показывает, что уже настроено, а что нет.
       </p>
+
+      {isLive && !session && (
+        <div className="mt-4 rounded-card bg-yellow-400/15 p-4">
+          <p className="text-[16px] font-semibold text-yellow-300">Сначала войдите</p>
+          <p className="mt-1 text-[14px] leading-snug text-yellow-100/80">
+            Почти все данные закрыты правилами доступа и видны только вошедшим.
+            Без входа проверки покажут пустоту, а не настоящее состояние.
+          </p>
+          <Link
+            to="/login"
+            className="mt-3 inline-block rounded-full bg-yellow-400/20 px-4 py-2 text-[15px]
+                       font-semibold text-yellow-200"
+          >
+            Перейти ко входу
+          </Link>
+        </div>
+      )}
 
       <div className="mt-5 space-y-2.5">
         {all.length === 0 && <p className="text-[16px] text-muted">Проверяем…</p>}
