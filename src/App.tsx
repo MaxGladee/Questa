@@ -20,6 +20,7 @@ import Quest from './screens/Quest'
 import CreateEvent from './screens/CreateEvent'
 import Settings from './screens/Settings'
 import Notifications from './screens/Notifications'
+import Health from './screens/Health'
 
 /**
  * Экраны за входом. Без сессии уводим на приветствие, с сессией но без
@@ -51,6 +52,7 @@ function Router () {
       <Route path="/confirm"    element={<Confirm />} />
       <Route path="/login"      element={<Login />} />
       <Route path="/interests"  element={<Interests />} />
+      <Route path="/health"     element={<Health />} />
 
       <Route path="/"        element={<RequireAuth><Home /></RequireAuth>} />
       <Route path="/events"  element={<RequireAuth><Events /></RequireAuth>} />
