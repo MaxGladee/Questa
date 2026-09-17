@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes, TextareaHTMLAttributes } from 'react'
 import { parseGeneratedAvatar } from './Art'
 
@@ -29,9 +30,13 @@ export function Button (
 }
 
 /**
- * Браузер по умолчанию считает безымянное текстовое поле формой входа и
- * подставляет туда почту. Поэтому автозаполнение выключено, пока поле само
- * не скажет, что в нём лежит: `autoComplete` из props перекрывает умолчание.
+ * Браузер считает безымянное текстовое поле формой входа и подставляет туда
+ * почту. Просьбы `autocomplete="off"` Chrome при этом сплошь и рядом
+ * игнорирует — на неё полагаться нельзя.
+ *
+ * Работает другое: поле, открытое только для чтения, не заполняют. Оно
+ * становится обычным в момент, когда до него дотрагиваются, — к этому
+ * времени решение о подстановке уже принято и отменено.
  */
 const noAutofill = {
   autoComplete: 'off',
@@ -42,10 +47,28 @@ const noAutofill = {
   'data-form-type': 'other',     // Dashlane
 } as const
 
+export function useAutofillGuard (enabled = true) {
+  const [locked, setLocked] = useState(enabled)
+  const unlock = () => setLocked(false)
+
+  // Замок снимается ещё на касании, до того как поле получит фокус: иначе
+  // на iPhone по тапу в поле, открытое только для чтения, не поднимается
+  // клавиатура.
+  return {
+    ...(enabled ? noAutofill : {}),
+    readOnly: enabled && locked,
+    onPointerDown: unlock,
+    onFocus: unlock,
+  }
+}
+
 export function Field ({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
+  // Поля входа заполнять можно и нужно — там подстановка помогает.
+  const guard = useAutofillGuard(!rest.autoComplete || rest.autoComplete === 'off')
+
   return (
     <input
-      {...noAutofill}
+      {...guard}
       {...rest}
       className={cx(
         'w-full rounded-field bg-field px-5 py-4 text-[17px] text-white',
@@ -57,9 +80,11 @@ export function Field ({ className, ...rest }: InputHTMLAttributes<HTMLInputElem
 }
 
 export function TextArea ({ className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const guard = useAutofillGuard(!rest.autoComplete || rest.autoComplete === 'off')
+
   return (
     <textarea
-      {...noAutofill}
+      {...guard}
       {...rest}
       className={cx(
         'w-full resize-none rounded-field bg-field px-5 py-4 text-[17px] text-white',
@@ -95,8 +120,6 @@ export function Card ({ children, className }: { children: ReactNode; className?
 }
 
 /** Аватар: фотография, а при её отсутствии — первая буква имени. */
-export { noAutofill }
-
 export function Avatar (
   { name, src, size = 44, className }:
   { name: string; src?: string; size?: number; className?: string },

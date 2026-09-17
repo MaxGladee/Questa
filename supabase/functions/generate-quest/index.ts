@@ -219,41 +219,64 @@ Deno.serve(async (request) => {
   // журнал функции виден лишь в панели Supabase, а разбираться приходится по
   // тому, что видно в приложении.
   const failures: string[] = []
+  let overloaded = false
 
-  for (const model of MODELS) {
-    try {
-      const response = await fetch(`${ENDPOINT}/${model}:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body,
-      })
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-      if (!response.ok) {
-        const detail = (await response.text()).replace(/\s+/g, ' ').slice(0, 200)
-        failures.push(`${model} → ${response.status}: ${detail}`)
-        continue
+  // Два прохода по списку моделей. «Высокая нагрузка» — состояние временное,
+  // и вторая попытка через пару секунд нередко проходит; один проход отдавал
+  // бы отказ там, где достаточно подождать.
+  for (let pass = 0; pass < 2; pass++) {
+    if (pass > 0) {
+      if (!overloaded) break        // отказ был не из-за нагрузки — ждать нечего
+      await wait(2000)
+    }
+
+    for (const model of MODELS) {
+      try {
+        const response = await fetch(`${ENDPOINT}/${model}:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body,
+        })
+
+        if (!response.ok) {
+          if (response.status === 503 || response.status === 429) overloaded = true
+          const detail = (await response.text()).replace(/\s+/g, ' ').slice(0, 160)
+          failures.push(`${model} → ${response.status}: ${detail}`)
+          continue
+        }
+
+        const payload = await response.json()
+        const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text
+
+        if (typeof text !== 'string') {
+          failures.push(`${model} → ответ без текста`)
+          continue
+        }
+
+        const quest = validateQuest(JSON.parse(text))
+        if (!quest) {
+          failures.push(`${model} → ответ не соответствует схеме квеста`)
+          continue
+        }
+
+        return json({ ...quest, model })
+      } catch (cause) {
+        failures.push(`${model} → ${cause instanceof Error ? cause.message : String(cause)}`)
       }
-
-      const payload = await response.json()
-      const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text
-
-      if (typeof text !== 'string') {
-        failures.push(`${model} → ответ без текста`)
-        continue
-      }
-
-      const quest = validateQuest(JSON.parse(text))
-      if (!quest) {
-        failures.push(`${model} → ответ не соответствует схеме квеста`)
-        continue
-      }
-
-      return json({ ...quest, model })
-    } catch (cause) {
-      failures.push(`${model} → ${cause instanceof Error ? cause.message : String(cause)}`)
     }
   }
 
   console.error('Генерация не удалась:', failures)
-  return json({ error: 'Модель недоступна', details: failures }, 502)
+
+  // Перегрузку у провайдера отделяем от настоящей поломки: лечится она
+  // ожиданием, и сообщать о ней надо иначе.
+  return json({
+    error: overloaded
+      ? 'Провайдер модели сейчас перегружен. Это временно: попробуйте через несколько минут.'
+      : 'Модель недоступна',
+    overloaded,
+    details: failures,
+  }, overloaded ? 503 : 502)
 })

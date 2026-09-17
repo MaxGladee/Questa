@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { PickerField, Sheet } from './Sheet'
+import { useAutofillGuard } from './ui'
 import { POPULAR_CITIES } from './ProfileFields'
 import { INTERESTS, MAX_INTERESTS } from '../data/demo'
 
@@ -9,6 +10,7 @@ export function CityField (
 ) {
   const [open, setOpen] = useState(false)
   const [typing, setTyping] = useState(false)
+  const guard = useAutofillGuard()
 
   const options = [
     ...POPULAR_CITIES.map((city) => ({ value: city, title: city })),
@@ -20,10 +22,10 @@ export function CityField (
       <div className="space-y-2">
         <span className="text-[15px] text-muted">Город</span>
         <input
-          autoFocus placeholder="Введите город" value={value}
-          autoComplete="address-level2" data-1p-ignore data-lpignore="true"
+          {...guard} autoFocus name="city" placeholder="Введите город" value={value}
           onChange={(event) => onChange(event.target.value)}
           onBlur={() => { if (!value.trim()) setTyping(false) }}
+          onFocus={guard.onFocus}
           className="w-full rounded-field bg-field px-5 py-4 text-[17px] text-white
                      placeholder:text-muted outline-none focus:ring-2 focus:ring-accent/60"
         />

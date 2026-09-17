@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { TabScreen } from '../components/Layout'
 import { EventListCard } from '../components/EventCard'
-import { Avatar, Progress } from '../components/ui'
+import { Avatar, Progress, useAutofillGuard } from '../components/ui'
 import { Empty, Failed, Loading } from '../components/States'
 import { BellIcon, ChevronIcon, MicIcon, SearchIcon } from '../components/icons'
 import { Cover } from '../components/Art'
@@ -46,6 +46,7 @@ export default function Home () {
   const { profile } = useAuth()
   const [day, setDay] = useState(0)
   const [query, setQuery] = useState('')
+  const guard = useAutofillGuard()
 
   const { data: events, error, loading, reload } = useAsync(
     () => listEvents(profile?.id ?? null), [profile?.id],
@@ -95,7 +96,7 @@ export default function Home () {
           <label className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl bg-surface px-3.5 py-3">
             <SearchIcon className="size-5 text-muted" />
             <input
-              type="search" autoComplete="off" data-1p-ignore data-lpignore="true"
+              {...guard} type="search" name="event-search"
               value={query} onChange={(e) => setQuery(e.target.value)}
               placeholder="Поиск" aria-label="Поиск ивента"
               className="min-w-0 flex-1 bg-transparent text-[17px] outline-none placeholder:text-muted"

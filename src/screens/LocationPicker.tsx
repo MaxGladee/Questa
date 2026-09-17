@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { Button, Field } from '../components/ui'
+import { Button, Field, useAutofillGuard } from '../components/ui'
 import { CloseIcon, PinIcon, SearchIcon } from '../components/icons'
 import { VENUES, type Venue } from '../data/venues'
 import { reverseGeocode } from '../lib/api'
@@ -32,6 +32,7 @@ export default function LocationPicker (
   const [me, setMe] = useState<[number, number] | null>(null)
   const [query, setQuery] = useState('')
   const [lookingUp, setLookingUp] = useState(false)
+  const guard = useAutofillGuard()
 
   const pin = L.divIcon({
     className: '',
@@ -123,7 +124,7 @@ export default function LocationPicker (
         <label className="flex items-center gap-2 rounded-field bg-field px-4 py-3">
           <SearchIcon className="size-5 shrink-0 text-muted" />
           <input
-            type="search" autoComplete="off" data-1p-ignore data-lpignore="true"
+            {...guard} type="search" name="venue-search"
             value={query} onChange={(e) => setQuery(e.target.value)}
             placeholder="Найти место" aria-label="Найти место"
             className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-muted"
