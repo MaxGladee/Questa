@@ -201,14 +201,22 @@ export default function Health () {
       const token_note = token ? 'токен входа приложен' : 'токена входа нет'
 
       if (!response.ok) {
-        const hint = {
-          401: 'сервер не принял токен. Проверьте в Supabase: Edge Functions → generate-quest → '
-             + 'Details → выключите «Verify JWT», либо убедитесь, что вход выполнен в этой же вкладке',
-          404: 'функции generate-quest нет — проверьте имя при создании',
-          503: 'функция создана, но ключ GEMINI_API_KEY не задан в Secrets',
-        }[response.status] ?? 'квесты будут браться из шаблонов'
+        // Проект может работать на новых ключах Supabase. Тогда функции не
+        // принимают старый ключ anon, хотя база с ним продолжает работать, —
+        // и ошибка выглядит как проблема со входом, хотя вход ни при чём.
+        const wrongKeyType = raw.includes('INVALID_API_KEY') || raw.includes('publishable')
 
-        report('warn', `${response.status}: ${hint} · ${token_note} · ответ: ${raw.slice(0, 160)}`)
+        const hint = wrongKeyType
+          ? 'проект перешёл на новые ключи: в приложении прописан старый ключ anon, '
+            + 'а функции принимают publishable. Нужен ключ вида sb_publishable_… '
+            + 'из Project Settings → API Keys'
+          : {
+              401: 'сервер не принял запрос — пришлите эту строку целиком',
+              404: 'функции generate-quest нет — проверьте имя при создании',
+              503: 'функция создана, но ключ GEMINI_API_KEY не задан в Secrets',
+            }[response.status] ?? 'квесты будут браться из шаблонов'
+
+        report('warn', `${response.status}: ${hint} · ${token_note} · ответ: ${raw.slice(0, 200)}`)
         return
       }
 
