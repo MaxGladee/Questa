@@ -492,6 +492,95 @@ export async function claimDailyReward (userId: string): Promise<{ day: number; 
   return { day: state.day, amount: state.amount }
 }
 
+// ───────────────────────── профиль другого человека ──────────────────────
+
+export interface PublicProfile {
+  id: string
+  nickname: string
+  avatarUrl?: string
+  city: string
+  expTotal: number
+  averageRating: number
+  streakDays: number
+  eventsAttended: number
+  eventsHosted: number
+  interests: string[]
+  /** Когда человек появился в приложении. */
+  since: string
+}
+
+// «с июня 2026», а не «с июнь 2026»: встроенное форматирование даёт месяц
+// в именительном падеже, и после предлога это читается неряшливо.
+const MONTHS_OF = [
+  'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+  'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
+]
+
+function monthAndYear (iso: string): string {
+  const date = new Date(iso)
+  return `${MONTHS_OF[date.getMonth()]} ${date.getFullYear()}`
+}
+
+/**
+ * Карточка другого участника (ЧТЗ 5.6): по ней решают, идти ли на встречу
+ * с незнакомым человеком. Баланс QP здесь не показывается — это личное,
+ * в отличие от уровня и оценок, которые как раз и говорят о человеке.
+ */
+export async function getPublicProfile (userId: string): Promise<PublicProfile> {
+  if (!isLive) {
+    const known = EVENTS.flatMap((event) => event.participants)
+      .find((person) => person.id === userId)
+
+    return {
+      id: userId,
+      nickname: known?.nickname ?? 'Участник',
+      avatarUrl: known?.avatarUrl,
+      city: 'Екатеринбург',
+      expTotal: 1400,
+      averageRating: known?.rating ?? 4.6,
+      streakDays: 4,
+      eventsAttended: 12,
+      eventsHosted: 3,
+      interests: ['party', 'chill', 'boardgames'],
+      since: 'июня 2026',
+    }
+  }
+
+  const client = db()
+
+  const { data: row, error } = await client.from('app_user')
+    .select('id, nickname, avatar_url, city, exp_total, streak_days, average_rating, created_at')
+    .eq('id', userId).maybeSingle()
+
+  if (error) throw error
+  if (!row) throw new Error('Пользователь не найден')
+
+  const [{ data: interests }, attended, hosted] = await Promise.all([
+    client.from('user_interest').select('interest (code)').eq('user_id', userId),
+    client.from('event_participant').select('id', { count: 'exact', head: true })
+      .eq('user_id', userId).not('checked_in_at', 'is', null),
+    client.from('event').select('id', { count: 'exact', head: true }).eq('organizer_id', userId),
+  ])
+
+  return {
+    id: row.id,
+    nickname: row.nickname,
+    avatarUrl: row.avatar_url ?? undefined,
+    city: row.city ?? '',
+    expTotal: row.exp_total,
+    averageRating: Number(row.average_rating ?? 0),
+    streakDays: row.streak_days,
+    eventsAttended: attended.count ?? 0,
+    eventsHosted: hosted.count ?? 0,
+    interests: (interests ?? []).flatMap((item: Row) => {
+      const related = item.interest
+      const list = Array.isArray(related) ? related : [related]
+      return list.flatMap((entry: Row | null) => (entry?.code ? [entry.code] : []))
+    }),
+    since: monthAndYear(row.created_at),
+  }
+}
+
 // ──────────────────────────── жалобы ─────────────────────────────────
 
 /**

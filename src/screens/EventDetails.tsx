@@ -128,10 +128,15 @@ export default function EventDetails () {
           </p>
           <div className="mt-3 flex items-center">
             {event.participants.slice(0, 4).map((person, index) => (
-              <Avatar
-                key={person.id} name={person.nickname} src={person.avatarUrl} size={46}
-                className={index > 0 ? '-ml-3 ring-2 ring-surface-2' : ''}
-              />
+              <Link
+                key={person.id} to={`/user/${person.id}`} aria-label={`Профиль: ${person.nickname}`}
+                className={index > 0 ? '-ml-3' : ''}
+              >
+                <Avatar
+                  name={person.nickname} src={person.avatarUrl} size={46}
+                  className={index > 0 ? 'ring-2 ring-surface-2' : ''}
+                />
+              </Link>
             ))}
             {event.participants.length > 4 && (
               <span className="-ml-3 grid size-[46px] place-items-center rounded-full bg-bg
@@ -150,7 +155,10 @@ export default function EventDetails () {
         )}
 
         {organizer && (
-          <div className="flex items-center gap-3 rounded-card bg-surface-2 p-3.5">
+          <Link
+            to={`/user/${organizer.id}`}
+            className="flex items-center gap-3 rounded-card bg-surface-2 p-3.5"
+          >
             <Avatar name={organizer.nickname} src={organizer.avatarUrl} size={52} />
             <div className="min-w-0 flex-1">
               <p className="truncate text-[18px] font-semibold">{organizer.nickname}</p>
@@ -160,7 +168,7 @@ export default function EventDetails () {
               </p>
             </div>
             <ChevronIcon className="size-5 shrink-0 text-muted" />
-          </div>
+          </Link>
         )}
 
         {/* Действия зависят от роли — таблица режимов из ЧТЗ 5.6. */}

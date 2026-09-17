@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { PlainScreen } from '../components/Layout'
 import { Avatar, Button, Field } from '../components/ui'
 import { Failed, Loading } from '../components/States'
@@ -121,8 +121,8 @@ export default function Summary () {
         <section className="space-y-3">
           <h2 className="text-[20px]">Кто сколько набрал</h2>
           {table.map((person, index) => (
-            <div
-              key={person.id}
+            <Link
+              key={person.id} to={`/user/${person.id}`}
               className={`flex items-center gap-3 rounded-card p-3.5 ${
                 person.id === profile?.id ? 'bg-surface-3' : 'bg-surface-2'}`}
             >
@@ -140,7 +140,7 @@ export default function Summary () {
                 </span>
               </span>
               <span className="shrink-0 text-[17px] font-bold text-accent">+{person.qp}</span>
-            </div>
+            </Link>
           ))}
         </section>
 

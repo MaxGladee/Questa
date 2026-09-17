@@ -303,10 +303,14 @@ export default function Chat () {
                 {!mine && (sameAsNext
                   ? <span className="size-8 shrink-0" />
                   : (
-                    <Avatar
-                      name={message.authorName ?? 'Участник'} src={message.authorAvatar} size={32}
-                      className="shrink-0"
-                    />
+                    <Link
+                      to={`/user/${message.authorId}`} className="shrink-0"
+                      aria-label={`Профиль: ${message.authorName ?? 'участник'}`}
+                    >
+                      <Avatar
+                        name={message.authorName ?? 'Участник'} src={message.authorAvatar} size={32}
+                      />
+                    </Link>
                   ))}
 
                 <div
