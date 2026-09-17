@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useOnline } from '../lib/useOnline'
 import { NavLink, useLocation } from 'react-router-dom'
 import { HomeIcon, FlameIcon, MapIcon, UserIcon } from './icons'
 
@@ -35,6 +36,22 @@ function BottomNav () {
  * Телефонная рамка. На телефоне приложение занимает весь экран, на десктопе
  * показывается колонкой в 390 точек — ширина макета в Figma.
  */
+/**
+ * Полоса «нет сети». Висит поверх экрана, а не вместо него: последние
+ * загруженные данные остаются на месте, и ими можно пользоваться —
+ * посмотреть адрес встречи, время и прочитанную переписку.
+ */
+function OfflineBar () {
+  const online = useOnline()
+  if (online) return null
+
+  return (
+    <div className="shrink-0 bg-surface-3 px-4 py-2 text-center text-[14px] text-accent-soft">
+      Нет соединения — показываем последнее, что успели загрузить
+    </div>
+  )
+}
+
 export function PhoneFrame ({ children }: { children: ReactNode }) {
   // Отступы под «чёлку» и нижнюю полосу жестов: приложение открывается на
   // весь экран, и без них содержимое уезжает под системные элементы.
@@ -47,6 +64,7 @@ export function PhoneFrame ({ children }: { children: ReactNode }) {
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
+      <OfflineBar />
       {children}
     </div>
   )

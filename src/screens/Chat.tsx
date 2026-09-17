@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { BackIcon, ClipIcon, SparkIcon } from '../components/icons'
-import { Failed, Loading } from '../components/States'
+import { Empty, Failed, Loading } from '../components/States'
 import type { ChatMessage } from '../data/demo'
 import {
   QUEST_READY, chatImageUrl, fileComplaint, getEvent, getQuest, listMessages,
@@ -159,6 +159,10 @@ export default function Chat () {
       <div className="no-scrollbar flex-1 space-y-3 overflow-y-auto px-4 pb-2">
         {loading && <Loading label="Загружаем переписку…" />}
         {error && <Failed message={error} />}
+
+        {!loading && !error && messages.length === 0 && (
+          <Empty label="Пока тихо. Напишите первым — например, где именно встречаемся." />
+        )}
 
         {messages.map((message) => {
           // Объявление о квесте — такое же системное сообщение, как остальные,

@@ -24,5 +24,15 @@ export function useAsync<T> (load: () => Promise<T>, deps: unknown[]) {
 
   useEffect(run, [run])
 
+  // Связь вернулась — повторяем неудавшийся запрос сами. Иначе человек
+  // остаётся смотреть на сообщение об ошибке, пока не догадается обновить.
+  useEffect(() => {
+    if (!error) return
+
+    const retry = () => run()
+    window.addEventListener('online', retry)
+    return () => window.removeEventListener('online', retry)
+  }, [error, run])
+
   return { data, error, loading, reload: run }
 }
