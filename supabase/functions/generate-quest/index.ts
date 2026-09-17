@@ -1,16 +1,23 @@
 // ИИ-генерация квеста по контексту ивента (ТЗ 4.2.6).
 //
-// Функция выполняется на сервере, а не в браузере: ключ LLM-провайдера
-// не должен попадать в клиентский код. Клиент присылает контекст ивента,
-// получает обратно готовый квест из трёх заданий.
+// Функция выполняется на стороне Supabase, а не в браузере: ключ модели не
+// должен попадать в код приложения, иначе его увидит любой, кто откроет
+// страницу. Клиент присылает контекст встречи, получает готовый квест.
 //
-// Ответ модели проверяется по схеме перед тем, как попасть в базу: модель
-// может вернуть невалидный JSON, четыре задания вместо трёх или тип задания,
-// которого в Системе нет. Всё это отсекается здесь (ТЗ 4.2.6, «валидация
-// ответа модели»).
+// Ответ модели проверяется по схеме до того, как попасть в базу: модель может
+// вернуть четыре задания вместо трёх, тип, которого в Системе нет, или номер
+// правильного ответа за пределами списка вариантов. Всё это отсекается здесь
+// («валидация ответа модели» из ТЗ 4.2.6). Если проверка не прошла, клиент
+// берёт шаблон из коллекции — квест у ивента будет в любом случае.
 
-const MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+const MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-2.5-flash'
 const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models'
+
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
 
 const CATEGORY_TITLES: Record<string, string> = {
   party: 'Тусовка',
@@ -21,34 +28,16 @@ const CATEGORY_TITLES: Record<string, string> = {
   other: 'Другое',
 }
 
-/** Контекст ивента, на основе которого генерируется квест. */
-export interface QuestContext {
+interface QuestContext {
   title: string
   description?: string
-  category: keyof typeof CATEGORY_TITLES | string
+  category: string
   address: string
   participants: number
   interests?: string[]
 }
 
-export type GeneratedTask =
-  | { type: 'geolocation'; title: string; description: string; qp_reward: number }
-  | { type: 'photo'; title: string; description: string; qp_reward: number; prompt: string }
-  | {
-      type: 'quiz'
-      title: string
-      description: string
-      qp_reward: number
-      questions: { question: string; options: string[]; correct_index: number }[]
-    }
-
-export interface GeneratedQuest {
-  title: string
-  tasks: [GeneratedTask, GeneratedTask, GeneratedTask]
-}
-
-// Схема, по которой модель обязана вернуть ответ. Gemini поддерживает
-// структурированный вывод, поэтому форма ответа задаётся, а не выпрашивается.
+// Форма ответа задаётся модели, а не выпрашивается словами.
 const RESPONSE_SCHEMA = {
   type: 'object',
   required: ['title', 'tasks'],
@@ -117,7 +106,7 @@ function buildPrompt (ctx: QuestContext): string {
 }
 
 /** Проверяет ответ модели. Возвращает квест или null, если ответ не годится. */
-export function validateQuest (raw: unknown): GeneratedQuest | null {
+function validateQuest (raw: unknown) {
   if (typeof raw !== 'object' || raw === null) return null
   const quest = raw as Record<string, unknown>
   const tasks = quest.tasks
@@ -130,24 +119,28 @@ export function validateQuest (raw: unknown): GeneratedQuest | null {
   const checked = tasks.map((item, index) => {
     if (typeof item !== 'object' || item === null) return null
     const task = item as Record<string, unknown>
+    const type = expected[index]
 
-    if (task.type !== expected[index]) return null
+    if (task.type !== type) return null
     if (typeof task.title !== 'string' || !task.title.trim()) return null
     if (typeof task.description !== 'string' || !task.description.trim()) return null
 
     const base = {
-      title: task.title.trim(),
+      type,
+      title: task.title.trim().slice(0, 60),
       description: task.description.trim(),
-      qp_reward: rewards[expected[index]],
+      qp_reward: rewards[type],
     }
 
-    if (task.type === 'geolocation') return { type: 'geolocation' as const, ...base }
+    if (type === 'geolocation') {
+      return { ...base, params: { radius_meters: 50 }, is_shared: false }
+    }
 
-    if (task.type === 'photo') {
+    if (type === 'photo') {
       const prompt = typeof task.prompt === 'string' && task.prompt.trim()
         ? task.prompt.trim()
         : base.description
-      return { type: 'photo' as const, ...base, prompt }
+      return { ...base, params: { prompt }, is_shared: false }
     }
 
     // Квиз: шесть вопросов, по 5 QP за верный ответ (ЧТЗ 5.12.1).
@@ -159,92 +152,75 @@ export function validateQuest (raw: unknown): GeneratedQuest | null {
       if (typeof q.question !== 'string' || !q.question.trim()) return null
       if (!Array.isArray(q.options) || q.options.length < 2 || q.options.length > 4) return null
       if (!q.options.every((option) => typeof option === 'string' && option.trim())) return null
-      if (typeof q.correct_index !== 'number') return null
-      if (!Number.isInteger(q.correct_index)) return null
+      if (typeof q.correct_index !== 'number' || !Number.isInteger(q.correct_index)) return null
       if (q.correct_index < 0 || q.correct_index >= q.options.length) return null
       return {
         question: q.question.trim(),
-        options: q.options as string[],
+        options: q.options,
         correct_index: q.correct_index,
       }
     })
 
     if (questions.some((q) => q === null)) return null
-    return { type: 'quiz' as const, ...base, questions: questions as NonNullable<(typeof questions)[number]>[] }
+    return { ...base, params: { questions }, is_shared: true }
   })
 
   if (checked.some((task) => task === null)) return null
-  return {
-    title: quest.title.trim(),
-    tasks: checked as GeneratedQuest['tasks'],
-  }
+  return { title: quest.title.trim(), tasks: checked }
 }
 
-/** Обращается к модели и возвращает проверенный квест. */
-export async function generateQuest (ctx: QuestContext, apiKey: string): Promise<GeneratedQuest> {
-  const response = await fetch(`${ENDPOINT}/${MODEL}:generateContent?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: buildPrompt(ctx) }] }],
-      generationConfig: {
-        temperature: 1,
-        responseMimeType: 'application/json',
-        responseSchema: RESPONSE_SCHEMA,
-      },
-    }),
-  })
+Deno.serve(async (request) => {
+  if (request.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
-  if (!response.ok) {
-    throw new Error(`LLM ответил ${response.status}: ${await response.text()}`)
-  }
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...CORS, 'content-type': 'application/json' },
+    })
 
-  const payload = await response.json()
-  const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text
-
-  if (typeof text !== 'string') throw new Error('LLM вернул ответ без текста')
-
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch {
-    throw new Error('LLM вернул не JSON')
-  }
-
-  const quest = validateQuest(parsed)
-  if (!quest) throw new Error('Ответ LLM не соответствует схеме квеста')
-
-  return quest
-}
-
-// Обработчик HTTP-запроса. Клиент шлёт контекст ивента методом POST.
-export default async function handler (request: Request): Promise<Response> {
-  if (request.method !== 'POST') {
-    return Response.json({ error: 'Только POST' }, { status: 405 })
-  }
-
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) {
-    return Response.json({ error: 'Ключ LLM не настроен' }, { status: 503 })
-  }
+  const apiKey = Deno.env.get('GEMINI_API_KEY')
+  if (!apiKey) return json({ error: 'Ключ модели не настроен' }, 503)
 
   let ctx: QuestContext
   try {
     ctx = await request.json()
   } catch {
-    return Response.json({ error: 'Некорректный запрос' }, { status: 400 })
+    return json({ error: 'Некорректный запрос' }, 400)
   }
 
   if (!ctx?.title || !ctx?.category || !ctx?.address) {
-    return Response.json({ error: 'Не хватает контекста ивента' }, { status: 400 })
+    return json({ error: 'Не хватает контекста ивента' }, 400)
   }
 
   try {
-    return Response.json(await generateQuest(ctx, apiKey))
-  } catch (error) {
-    // Клиент по этому ответу переходит на шаблон из базы — квест будет в любом
-    // случае, даже если модель недоступна.
-    console.error('Генерация квеста не удалась:', error)
-    return Response.json({ error: 'Генерация недоступна' }, { status: 502 })
+    const response = await fetch(`${ENDPOINT}/${MODEL}:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: buildPrompt(ctx) }] }],
+        generationConfig: {
+          temperature: 1,
+          responseMimeType: 'application/json',
+          responseSchema: RESPONSE_SCHEMA,
+        },
+      }),
+    })
+
+    if (!response.ok) {
+      console.error('Модель ответила', response.status, await response.text())
+      return json({ error: 'Модель недоступна' }, 502)
+    }
+
+    const payload = await response.json()
+    const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text
+    if (typeof text !== 'string') return json({ error: 'Пустой ответ модели' }, 502)
+
+    const quest = validateQuest(JSON.parse(text))
+    if (!quest) return json({ error: 'Ответ не соответствует схеме квеста' }, 502)
+
+    return json(quest)
+  } catch (cause) {
+    console.error('Генерация не удалась:', cause)
+    return json({ error: 'Генерация недоступна' }, 502)
   }
-}
+})

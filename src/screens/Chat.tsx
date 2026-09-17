@@ -92,7 +92,9 @@ export default function Chat () {
               <div key={message.id} className="space-y-2 pt-1">
                 <p className="text-center text-[16px] font-semibold">
                   <SparkIcon className="mr-1.5 inline size-4 align-[-2px] text-accent" />
-                  {message.body}
+                  {quest.quest.source === 'ai'
+                    ? 'ИИ сгенерировал квест! Проверьте задания ↓'
+                    : message.body}
                 </p>
                 <Link to={`/event/${id}/quest`} className="block rounded-[22px] bg-surface-2 p-4">
                   <p className="text-[19px] font-bold text-accent">Ваши задания готовы!</p>

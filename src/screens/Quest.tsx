@@ -4,7 +4,7 @@ import { PlainScreen } from '../components/Layout'
 import { Avatar } from '../components/ui'
 import { Failed, Loading } from '../components/States'
 import {
-  BackIcon, CameraIcon, ChevronIcon, GeoTaskIcon, PinIcon, QuizIcon,
+  BackIcon, CameraIcon, ChevronIcon, GeoTaskIcon, PinIcon, QuizIcon, SparkIcon,
 } from '../components/icons'
 import type { QuestTask } from '../data/demo'
 import { checkIn, completeTask, getEvent, getQuest } from '../lib/api'
@@ -104,20 +104,31 @@ export default function Quest () {
         </button>
 
         <div className="flex items-end justify-between rounded-card bg-surface-2 p-5">
-          <div className="min-w-0">
-            <p className="whitespace-nowrap text-[18px] font-bold">Заработанные очки</p>
-            <p className="text-[44px] font-extrabold leading-tight text-accent">{earned} QP</p>
+          <div className="min-w-0 flex-1">
+            <p className="whitespace-nowrap text-[17px] font-bold">Заработанные очки</p>
+            <p className="whitespace-nowrap text-[40px] font-extrabold leading-tight text-accent">
+              {earned} QP
+            </p>
           </div>
           <div className="shrink-0 text-right">
-            <p className="whitespace-nowrap text-[20px] font-bold">
+            <p className="whitespace-nowrap text-[18px] font-bold">
               #{myPlace} из {board.length}
             </p>
-            <p className="whitespace-nowrap text-[14px] font-semibold">в таблице лидеров</p>
+            <p className="whitespace-nowrap text-[13px] font-semibold">в таблице лидеров</p>
           </div>
         </div>
 
         <section className="space-y-3">
-          <h2 className="text-[24px]">Твои задания</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-[24px]">Твои задания</h2>
+            {state.quest.source === 'ai' && (
+              <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-accent/20
+                               px-3 py-1.5 text-[13px] font-semibold text-accent-soft">
+                <SparkIcon className="size-3.5" />
+                придумано ИИ
+              </span>
+            )}
+          </div>
           {tasks.map((task) => {
             const Icon = TASK_ICON[task.type]
             return (

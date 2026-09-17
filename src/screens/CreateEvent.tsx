@@ -57,6 +57,7 @@ export default function CreateEvent () {
         maxParticipants: to,
         category,
         chatMode,
+        interests: profile!.interests,
       }, profile!.id)
       setCreated(id)
     } catch (cause) {
@@ -210,7 +211,7 @@ export default function CreateEvent () {
         {error && <p className="text-[15px] text-red-400">{error}</p>}
 
         <Button onClick={submit} disabled={busy}>
-          {busy ? 'Создаём…' : 'Создать ивент'}
+          {busy ? 'Придумываем квест…' : 'Создать ивент'}
         </Button>
       </div>
     </div>

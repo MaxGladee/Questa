@@ -84,6 +84,18 @@ export interface NewEvent {
   maxParticipants: number
   category: CategoryCode
   chatMode: 'auto' | 'manual'
+  /** Интересы организатора — часть контекста, который уходит в модель. */
+  interests?: string[]
+}
+
+/** Задание в том виде, в каком его возвращает функция генерации. */
+interface GeneratedTask {
+  type: TaskType
+  title: string
+  description: string
+  qp_reward: number
+  is_shared: boolean
+  params: Record<string, unknown>
 }
 
 /**
@@ -117,8 +129,68 @@ export async function createEvent (input: NewEvent, organizerId: string): Promis
   await client.from('event_participant')
     .insert({ event_id: event.id, user_id: organizerId, role: 'organizer' })
 
-  await buildQuestFromTemplate(event.id, category!.id)
+  // Квест сперва пробуем сгенерировать по контексту встречи (ТЗ 4.2.6);
+  // если модель недоступна или её ответ не прошёл проверку — берём шаблон.
+  const generated = await generateQuest(input)
+  if (generated) {
+    await saveQuest(event.id, 'ai', null, generated)
+  } else {
+    await buildQuestFromTemplate(event.id, category!.id)
+  }
+
   return event.id
+}
+
+/**
+ * Обращение к функции генерации на стороне Supabase. Ключ модели лежит там,
+ * в приложение он не попадает. Ошибка здесь не срывает создание ивента —
+ * возвращаем null, и вызывающий код берёт шаблон.
+ */
+async function generateQuest (input: NewEvent): Promise<GeneratedTask[] | null> {
+  try {
+    const { data, error } = await db().functions.invoke('generate-quest', {
+      body: {
+        title: input.title,
+        description: input.description,
+        category: input.category,
+        address: input.address,
+        participants: input.maxParticipants,
+        interests: input.interests ?? [],
+      },
+    })
+
+    if (error || !Array.isArray(data?.tasks) || data.tasks.length !== 3) return null
+    return data.tasks as GeneratedTask[]
+  } catch {
+    return null
+  }
+}
+
+/** Запись квеста и трёх его заданий в базу. */
+async function saveQuest (
+  eventId: string,
+  source: 'ai' | 'template',
+  templateId: string | null,
+  tasks: GeneratedTask[],
+): Promise<void> {
+  const client = db()
+
+  const { data: quest, error } = await client
+    .from('quest').insert({ event_id: eventId, template_id: templateId, source })
+    .select('id').single()
+
+  if (error) throw error
+
+  await client.from('task').insert(tasks.map((task, index) => ({
+    quest_id: quest.id,
+    position: index + 1,
+    type: task.type,
+    title: task.title,
+    description: task.description,
+    qp_reward: task.qp_reward,
+    is_shared: task.is_shared,
+    params: task.params,
+  })))
 }
 
 /** Подбор случайного шаблона под категорию ивента (ЧТЗ 5.10). */
@@ -132,27 +204,12 @@ async function buildQuestFromTemplate (eventId: string, categoryId: number) {
 
   const template = templates[Math.floor(Math.random() * templates.length)]
 
-  const { data: quest, error } = await client
-    .from('quest').insert({ event_id: eventId, template_id: template.id, source: 'template' })
-    .select('id').single()
-
-  if (error) return
-
   const { data: tasks } = await client
     .from('task_template').select('*').eq('quest_template_id', template.id).order('position')
 
   if (!tasks?.length) return
 
-  await client.from('task').insert(tasks.map((task: Row) => ({
-    quest_id: quest.id,
-    position: task.position,
-    type: task.type,
-    title: task.title,
-    description: task.description,
-    qp_reward: task.qp_reward,
-    is_shared: task.is_shared,
-    params: task.params,
-  })))
+  await saveQuest(eventId, 'template', template.id, tasks as GeneratedTask[])
 }
 
 /**
