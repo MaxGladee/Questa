@@ -19,6 +19,7 @@ import Chat from './screens/Chat'
 import Quest from './screens/Quest'
 import CreateEvent from './screens/CreateEvent'
 import Settings from './screens/Settings'
+import Notifications from './screens/Notifications'
 
 /**
  * Экраны за входом. Без сессии уводим на приветствие, с сессией но без
@@ -37,7 +38,12 @@ function RequireAuth ({ children }: { children: ReactNode }) {
 }
 
 function Router () {
+  const { pathname } = useLocation()
+
+  // key по адресу заставляет React пересоздать обёртку при переходе,
+  // и анимация появления проигрывается заново на каждом экране.
   return (
+    <div key={pathname} className="animate-screen h-full">
     <Routes>
       <Route path="/start"      element={<Splash />} />
       <Route path="/onboarding" element={<Onboarding />} />
@@ -51,6 +57,7 @@ function Router () {
       <Route path="/map"     element={<RequireAuth><MapScreen /></RequireAuth>} />
       <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
       <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
+      <Route path="/notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
 
       <Route path="/create"          element={<RequireAuth><CreateEvent /></RequireAuth>} />
       <Route path="/event/:id"       element={<RequireAuth><EventDetails /></RequireAuth>} />
@@ -59,6 +66,7 @@ function Router () {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </div>
   )
 }
 

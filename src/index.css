@@ -49,3 +49,36 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.02em; }
   background: linear-gradient(180deg, #9B83FF 0%, #7C5CFF 100%);
   box-shadow: 0 8px 24px -8px rgb(135 105 255 / 0.7);
 }
+
+/* ─────────────────────────── движение ───────────────────────────
+   Анимации короткие и однонаправленные: их задача — показать, откуда
+   взялся элемент, а не развлекать. Тем, кто просил у системы убрать
+   анимации, они не показываются вовсе. */
+
+@keyframes screen-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes message-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes pop-in {
+  0%   { opacity: 0; transform: scale(0.85); }
+  60%  { transform: scale(1.04); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@utility animate-screen { animation: screen-in 220ms ease-out both; }
+@utility animate-message { animation: message-in 240ms ease-out both; }
+@utility animate-pop { animation: pop-in 320ms ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

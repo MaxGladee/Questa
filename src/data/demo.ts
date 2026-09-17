@@ -46,6 +46,8 @@ export interface QuestTask {
   qpReward: number
   isShared: boolean
   completed: boolean
+  /** Сколько QP начислено по факту — у квиза зависит от числа верных ответов. */
+  awardedQp?: number
   questions?: { question: string; options: string[]; correctIndex: number }[]
   /** Параметры задания: цель и радиус для геолокации, подсказка для фото. */
   params?: {

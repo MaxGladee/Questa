@@ -10,6 +10,13 @@ import {
 
 type Row = Record<string, any>
 
+/**
+ * Выполненные задания в демонстрационном режиме. Хранятся в памяти вкладки:
+ * базы в этом режиме нет, но пройти квест и увидеть, как растут очки, должно
+ * быть можно — иначе страховочный режим бесполезен для показа.
+ */
+const demoCompleted = new Map<string, number>([['k1', 30]])
+
 const EVENT_QUERY = `
   id, title, description, cover_url, address, lat, lng, starts_at,
   min_participants, max_participants, status, chat_opened_at, organizer_id,
@@ -227,6 +234,18 @@ export async function joinEvent (eventId: string, userId: string): Promise<void>
     .insert({ event_id: eventId, user_id: userId, role: 'participant' })
   if (error) throw error
 
+  const { data: event } = await client
+    .from('event').select('title, organizer_id').eq('id', eventId).single()
+
+  if (event && event.organizer_id !== userId) {
+    await notify(
+      [event.organizer_id], 'join',
+      'Заявка на участие',
+      `Кто-то присоединился к ивенту «${event.title}»`,
+      eventId,
+    )
+  }
+
   await openChatIfGroupComplete(eventId)
 }
 
@@ -276,6 +295,19 @@ export async function openChat (eventId: string): Promise<void> {
       event_id: eventId, user_id: null, kind: 'system', body: QUEST_READY,
     })
   }
+
+  const [{ data: event }, { data: members }] = await Promise.all([
+    client.from('event').select('title').eq('id', eventId).single(),
+    client.from('event_participant').select('user_id').eq('event_id', eventId),
+  ])
+
+  await notify(
+    (members ?? []).map((member) => member.user_id),
+    'group',
+    'Группа набрана!',
+    `Чат ивента «${event?.title ?? ''}» открыт`,
+    eventId,
+  )
 }
 
 export async function leaveEvent (eventId: string, userId: string): Promise<void> {
@@ -314,11 +346,23 @@ export interface QuestState {
 
 export async function getQuest (eventId: string, viewerId: string | null): Promise<QuestState> {
   if (!isLive) {
-    const quest = EVENTS.find((event) => event.id === eventId)?.quest ?? null
+    const event = EVENTS.find((item) => item.id === eventId)
+    const quest = event?.quest
+      ? {
+          ...event.quest,
+          tasks: event.quest.tasks.map((task) => ({
+            ...task,
+            completed: demoCompleted.has(task.id),
+            awardedQp: demoCompleted.get(task.id),
+          })),
+        }
+      : null
+
     const earned = Object.fromEntries(
-      (EVENTS.find((event) => event.id === eventId)?.participants ?? [])
-        .map((person) => [person.id, person.qpEarned]),
+      (event?.participants ?? []).map((person) => [person.id, person.qpEarned]),
     )
+    earned[viewerId ?? 'me'] = [...demoCompleted.values()].reduce((sum, qp) => sum + qp, 0)
+
     return { quest, earned }
   }
 
@@ -338,8 +382,10 @@ export async function getQuest (eventId: string, viewerId: string | null): Promi
     earned[row.user_id] = (earned[row.user_id] ?? 0) + row.qp_awarded
   }
 
-  const mine = new Set(
-    (completions ?? []).filter((row) => row.user_id === viewerId).map((row) => row.task_id),
+  const mine = new Map(
+    (completions ?? [])
+      .filter((row) => row.user_id === viewerId)
+      .map((row) => [row.task_id, row.qp_awarded]),
   )
 
   const tasks: QuestTask[] = (quest.task ?? [])
@@ -353,6 +399,7 @@ export async function getQuest (eventId: string, viewerId: string | null): Promi
       qpReward: task.qp_reward,
       isShared: task.is_shared,
       completed: mine.has(task.id),
+      awardedQp: mine.get(task.id),
       params: task.params ?? {},
       questions: (task.params?.questions ?? []).map((item: Row) => ({
         question: item.question,
@@ -382,7 +429,11 @@ export async function completeTask (
     answer?: unknown
   },
 ): Promise<void> {
-  if (!isLive) return
+  if (!isLive) {
+    demoCompleted.set(task.id, qpAwarded)
+    return
+  }
+
   const client = db()
 
   const { error } = await client.from('task_completion').insert({
@@ -408,6 +459,96 @@ export async function completeTask (
       body: `${nickname} выполнил задание «${task.title}» · +${qpAwarded} QP`,
     }),
   ])
+
+  const { data: members } = await client
+    .from('event_participant').select('user_id').eq('event_id', eventId)
+
+  await notify(
+    (members ?? []).map((member) => member.user_id).filter((id) => id !== userId),
+    'task',
+    'Задание выполнено',
+    `${nickname} справился с заданием «${task.title}»`,
+    eventId,
+  )
+}
+
+// ────────────────────────────── уведомления ─────────────────────────────
+
+export interface Notification {
+  id: string
+  type: string
+  title: string
+  body: string | null
+  eventId?: string
+  isRead: boolean
+  at: string
+}
+
+/** Складывает уведомление в центр уведомлений получателям (ЧТЗ 5.16). */
+async function notify (
+  userIds: string[],
+  type: string,
+  title: string,
+  body: string,
+  eventId?: string,
+): Promise<void> {
+  if (!isLive || userIds.length === 0) return
+
+  // Уведомление — не главное в действии, ради которого его отправляют:
+  // если оно не запишется, присоединение или зачёт задания не должны падать.
+  try {
+    await db().from('notification').insert(userIds.map((userId) => ({
+      user_id: userId,
+      type,
+      title,
+      body,
+      payload: eventId ? { event_id: eventId } : {},
+    })))
+  } catch {
+    // намеренно тихо
+  }
+}
+
+export async function listNotifications (userId: string): Promise<Notification[]> {
+  if (!isLive) return []
+
+  const { data, error } = await db()
+    .from('notification')
+    .select('id, type, title, body, payload, is_read, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  if (error) throw error
+
+  return (data ?? []).map((row: Row) => ({
+    id: row.id,
+    type: row.type,
+    title: row.title,
+    body: row.body,
+    eventId: row.payload?.event_id,
+    isRead: row.is_read,
+    at: new Date(row.created_at).toLocaleString('ru-RU', {
+      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+    }),
+  }))
+}
+
+export async function countUnread (userId: string): Promise<number> {
+  if (!isLive) return 0
+
+  const { count } = await db()
+    .from('notification').select('id', { count: 'exact', head: true })
+    .eq('user_id', userId).eq('is_read', false)
+
+  return count ?? 0
+}
+
+/** Открытие центра уведомлений помечает всё прочитанным (ЧТЗ 5.8, 5.16). */
+export async function markNotificationsRead (userId: string): Promise<void> {
+  if (!isLive) return
+  await db().from('notification').update({ is_read: true })
+    .eq('user_id', userId).eq('is_read', false)
 }
 
 // ───────────────────────────────── чат ──────────────────────────────────

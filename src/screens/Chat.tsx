@@ -89,7 +89,7 @@ export default function Chat () {
           // но показывается карточкой со списком заданий.
           if (message.authorId === null && message.body === QUEST_READY && quest?.quest) {
             return (
-              <div key={message.id} className="space-y-2 pt-1">
+              <div key={message.id} className="animate-message space-y-2 pt-1">
                 <p className="text-center text-[16px] font-semibold">
                   <SparkIcon className="mr-1.5 inline size-4 align-[-2px] text-accent" />
                   {quest.quest.source === 'ai'
@@ -119,7 +119,10 @@ export default function Chat () {
 
           const mine = message.authorId === profile?.id
           return (
-            <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+            <div
+              key={message.id}
+              className={`animate-message flex ${mine ? 'justify-end' : 'justify-start'}`}
+            >
               <div
                 className={`max-w-[78%] rounded-[22px] px-4 py-3 ${
                   mine ? 'bg-accent text-white' : 'bg-bubble text-bg'}`}

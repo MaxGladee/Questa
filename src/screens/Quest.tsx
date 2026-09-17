@@ -10,6 +10,7 @@ import type { QuestTask } from '../data/demo'
 import { checkIn, completeTask, getEvent, getQuest } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
+import { useCountUp } from '../lib/useCountUp'
 import Quiz from './Quiz'
 import GeoTask from './GeoTask'
 
@@ -33,6 +34,10 @@ export default function Quest () {
     () => getQuest(id!, profile?.id ?? null), [id, profile?.id],
   )
 
+  const myId = profile?.id ?? ''
+  const earned = state?.earned[myId] ?? 0
+  const shownEarned = useCountUp(earned)
+
   if (loading) return <PlainScreen title="Задания"><Loading /></PlainScreen>
   if (error) return <PlainScreen title="Задания"><Failed message={error} onRetry={reload} /></PlainScreen>
 
@@ -47,8 +52,6 @@ export default function Quest () {
   }
 
   const tasks = state.quest.tasks
-  const myId = profile?.id ?? ''
-  const earned = state.earned[myId] ?? 0
   const checkedIn = event?.participants.find((person) => person.id === myId)?.checkedIn ?? false
 
   const board = (event?.participants ?? [])
@@ -108,8 +111,9 @@ export default function Quest () {
         <div className="flex items-end justify-between rounded-card bg-surface-2 p-5">
           <div className="min-w-0 flex-1">
             <p className="whitespace-nowrap text-[17px] font-bold">Заработанные очки</p>
-            <p className="whitespace-nowrap text-[40px] font-extrabold leading-tight text-accent">
-              {earned} QP
+            <p className="whitespace-nowrap text-[40px] font-extrabold leading-tight text-accent
+                          tabular-nums">
+              {shownEarned} QP
             </p>
           </div>
           <div className="shrink-0 text-right">
@@ -151,9 +155,17 @@ export default function Quest () {
                   <p className="truncate text-[16px] text-white/85">{task.description}</p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className={`text-[16px] font-semibold ${
-                    task.completed ? 'text-success' : 'text-white'}`}>
-                    +{task.qpReward} QP
+                  {/*
+                    У квиза награда зависит от числа верных ответов, поэтому
+                    до выполнения показываем потолок, а после — начисленное.
+                  */}
+                  <p className={`whitespace-nowrap text-[16px] font-semibold ${
+                    task.completed ? 'animate-pop text-success' : 'text-white'}`}>
+                    {task.completed
+                      ? `+${task.awardedQp ?? task.qpReward} QP`
+                      : task.type === 'quiz'
+                        ? `до +${task.qpReward} QP`
+                        : `+${task.qpReward} QP`}
                   </p>
                   <ChevronIcon className="ml-auto mt-1 size-5" />
                 </div>

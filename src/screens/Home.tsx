@@ -6,7 +6,7 @@ import { Avatar, Progress } from '../components/ui'
 import { Empty, Failed, Loading } from '../components/States'
 import { BellIcon, ChevronIcon, MicIcon, SearchIcon } from '../components/icons'
 import { useAuth } from '../lib/auth'
-import { getQuest, listEvents } from '../lib/api'
+import { countUnread, getQuest, listEvents } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
 
 /** Горизонтальный календарь на пять дней вперёд (ЧТЗ 5.3, пункт 5). */
@@ -46,6 +46,10 @@ export default function Home () {
 
   const { data: events, error, loading, reload } = useAsync(
     () => listEvents(profile?.id ?? null), [profile?.id],
+  )
+
+  const { data: unread } = useAsync(
+    () => profile ? countUnread(profile.id) : Promise.resolve(0), [profile?.id],
   )
 
   // Активный ивент — тот, что уже идёт и в котором пользователь участвует.
@@ -93,9 +97,18 @@ export default function Home () {
             <MicIcon className="size-5 text-muted" />
           </label>
 
-          <button aria-label="Уведомления" className="shrink-0 rounded-2xl bg-surface p-3">
+          <Link
+            to="/notifications" aria-label="Уведомления"
+            className="relative shrink-0 rounded-2xl bg-surface p-3"
+          >
             <BellIcon className="size-6" />
-          </button>
+            {(unread ?? 0) > 0 && (
+              <span className="absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full
+                               bg-accent px-1.5 text-[12px] font-bold">
+                {unread! > 9 ? '9+' : unread}
+              </span>
+            )}
+          </Link>
         </header>
 
         {active && (
