@@ -7,13 +7,25 @@ import { Empty, Failed, Loading } from '../components/States'
 import { BellIcon, ChevronIcon, MicIcon, SearchIcon } from '../components/icons'
 import { Cover } from '../components/Art'
 import { ideasForToday } from '../data/ideas'
-import { categoryTitle } from '../data/demo'
+import { categoryTitle, formatTime, type QuestaEvent } from '../data/demo'
 import { useAuth } from '../lib/auth'
 import { countUnread, getQuest, listEvents } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
 
-/** Горизонтальный календарь на пять дней вперёд (ЧТЗ 5.3, пункт 5). */
-function DateStrip ({ value, onChange }: { value: number; onChange: (day: number) => void }) {
+/**
+ * Горизонтальный календарь на пять дней вперёд (ЧТЗ 5.3, пункт 5).
+ *
+ * На днях, где у человека уже есть встреча, стоят миниатюры её обложки:
+ * так свои планы видно сразу, не переключая дни по одному.
+ */
+function DateStrip (
+  { value, onChange, planned }: {
+    value: number
+    onChange: (day: number) => void
+    /** Свои ивенты по дням — ключ вида Date.toDateString(). */
+    planned: Record<string, QuestaEvent[]>
+  },
+) {
   const today = new Date()
   const days = Array.from({ length: 5 }, (_, offset) => {
     const date = new Date(today)
@@ -25,15 +37,30 @@ function DateStrip ({ value, onChange }: { value: number; onChange: (day: number
     <div className="no-scrollbar -mx-5 flex gap-3 overflow-x-auto px-5">
       {days.map((date, index) => {
         const active = index === value
+        const mine = planned[date.toDateString()] ?? []
+
         return (
           <button
             key={index} onClick={() => onChange(index)}
-            className={`flex w-[74px] shrink-0 flex-col items-center gap-1 rounded-[20px] py-4
-                        transition ${active ? 'bg-white text-bg' : 'bg-surface text-white'}`}
+            className={`flex w-[74px] shrink-0 flex-col items-center gap-1 rounded-[20px] py-3
+                        transition ${active ? 'bg-white text-bg' : 'bg-surface text-white'} ${
+                          mine.length > 0 && !active ? 'ring-1 ring-accent/60' : ''}`}
           >
             <span className="text-[26px] font-bold leading-none">{date.getDate()}</span>
             <span className={`text-[13px] ${active ? 'text-bg/60' : 'text-muted'}`}>
               {date.toLocaleDateString('ru-RU', { weekday: 'short' })}
+            </span>
+
+            {/* Место под метки занято всегда, иначе дни разной высоты. */}
+            <span className="flex h-5 items-center">
+              {mine.slice(0, 3).map((event, position) => (
+                <Cover
+                  key={event.id} src={event.coverUrl} category={event.category}
+                  className={`size-5 rounded-full ${position > 0 ? '-ml-1.5' : ''} ${
+                    active ? 'ring-1 ring-bg/20' : 'ring-1 ring-surface'}`}
+                  emojiClassName="text-[10px]"
+                />
+              ))}
             </span>
           </button>
         )
@@ -75,6 +102,18 @@ export default function Home () {
   chosenDay.setDate(chosenDay.getDate() + day)
 
   const ideas = ideasForToday()
+
+  // Свои встречи по дням: те, куда человек записан или которые ведёт сам.
+  const planned: Record<string, QuestaEvent[]> = {}
+  for (const event of events ?? []) {
+    if (event.myRole === 'guest') continue
+    if (event.status !== 'active' && event.status !== 'in_progress') continue
+
+    const key = new Date(event.startsAt).toDateString()
+    ;(planned[key] ??= []).push(event)
+  }
+
+  const plans = planned[chosenDay.toDateString()] ?? []
 
   const recommended = (events ?? []).filter((event) => {
     if (event.status !== 'active' || event.myRole !== 'guest') return false
@@ -146,7 +185,35 @@ export default function Home () {
           </Link>
         )}
 
-        <DateStrip value={day} onChange={setDay} />
+        <DateStrip value={day} onChange={setDay} planned={planned} />
+
+        {plans.length > 0 && (
+          <section className="space-y-3">
+            <h2 className="text-[24px]">
+              {day === 0 ? 'Сегодня у вас' : 'В этот день у вас'}
+            </h2>
+            {plans.map((event) => (
+              <Link
+                key={event.id} to={`/event/${event.id}`}
+                className="flex items-center gap-3 rounded-card bg-surface-3 p-3.5"
+              >
+                <Cover
+                  src={event.coverUrl} category={event.category}
+                  className="size-12 shrink-0 rounded-xl" emojiClassName="text-2xl"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[17px] font-semibold">{event.title}</span>
+                  <span className="block text-[15px] text-muted">
+                    {formatTime(event.startsAt)} · {event.myRole === 'organizer'
+                      ? 'вы организатор'
+                      : 'вы участвуете'}
+                  </span>
+                </span>
+                <ChevronIcon className="size-5 shrink-0 text-muted" />
+              </Link>
+            ))}
+          </section>
+        )}
 
         <section className="space-y-3">
           <h2 className="text-[24px]">Рекомендации</h2>
