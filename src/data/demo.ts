@@ -40,6 +40,13 @@ export const INTERESTS: { code: string; title: string }[] = [
   { code: 'theatre', title: 'Театр' },
 ]
 
+/**
+ * Сколько интересов можно отметить. Ограничение не формальное: по интересам
+ * подбираются рекомендации и строится контекст для генерации квеста, а
+ * человек, отметивший всё подряд, не сообщает о себе ничего.
+ */
+export const MAX_INTERESTS = 5
+
 /** Категории ивента — только эти шесть, как требует ЧТЗ. */
 export const CATEGORIES: { code: CategoryCode; title: string }[] = [
   { code: 'party', title: 'Тусовка' },

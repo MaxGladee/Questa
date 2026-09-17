@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui'
-import { AvatarPicker, CityPicker, NicknameField } from '../components/ProfileFields'
+import { AvatarPicker, NicknameField } from '../components/ProfileFields'
+import { InterestsField, CityField } from '../components/ProfilePickers'
 import { randomAvatar } from '../components/Art'
-import { INTERESTS } from '../data/demo'
 import { useAuth } from '../lib/auth'
 
 /** Никнейм, город и интересы — шаг 5 регистрации (ЧТЗ 5.1.1). */
@@ -34,9 +34,6 @@ export default function Interests () {
     }
   }
 
-  const toggle = (code: string) =>
-    setChosen((list) => (list.includes(code) ? list.filter((c) => c !== code) : [...list, code]))
-
   // Профиль уже заполнен — например, страницу просто перезагрузили.
   if (ready && profile) return <Navigate to="/" replace />
 
@@ -52,24 +49,8 @@ export default function Interests () {
           name={nickname} value={avatar} userId={session?.user.id} onChange={setAvatar}
         />
         <NicknameField value={nickname} onChange={(value) => { setNickname(value); setError('') }} />
-        <CityPicker value={city} onChange={setCity} />
-      </div>
-
-      <div className="space-y-3">
-        <h2 className="text-[20px]">Интересы</h2>
-        <div className="flex flex-wrap gap-2.5">
-          {INTERESTS.map(({ code, title }) => (
-            <button
-              key={code} onClick={() => toggle(code)}
-              className={`rounded-2xl px-5 py-3 text-[16px] font-medium transition ${
-                chosen.includes(code)
-                  ? 'bg-accent text-white'
-                  : 'border border-white/15 text-white'}`}
-            >
-              {title}
-            </button>
-          ))}
-        </div>
+        <CityField value={city} onChange={setCity} />
+        <InterestsField value={chosen} onChange={setChosen} />
       </div>
 
       <div className="mt-auto space-y-3">

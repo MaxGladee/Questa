@@ -223,10 +223,21 @@ export default function Health () {
       const data = JSON.parse(raw)
       const tasks = Array.isArray(data?.tasks) ? data.tasks.length : 0
 
-      report(tasks === 3 ? 'ok' : 'warn',
-        tasks === 3
-          ? `модель придумала квест: ${data.tasks.map((task: { title: string }) => task.title).join(', ')}`
-          : `ответ пришёл, но не в нужном виде: ${raw.slice(0, 160)}`)
+      if (tasks === 3) {
+        report('ok', 'модель придумала квест: '
+          + data.tasks.map((task: { title: string }) => task.title).join(', '))
+        return
+      }
+
+      // Supabase создаёт функцию с примером «Hello World». Если он отвечает,
+      // значит наш код в редактор не попал или не был опубликован.
+      const scaffold = typeof data?.message === 'string' && data.message.startsWith('Hello')
+
+      report('warn', scaffold
+        ? 'в функции лежит заготовка Supabase, а не наш код: откройте Edge Functions → '
+          + 'generate-quest → Code, выделите всё, вставьте содержимое '
+          + 'supabase/functions/generate-quest/index.ts и нажмите Deploy'
+        : `ответ пришёл, но не в нужном виде: ${raw.slice(0, 200)}`)
     } catch (cause) {
       report('fail', cause instanceof Error ? cause.message : 'не удалось вызвать функцию')
     } finally {

@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PlainScreen } from '../components/Layout'
 import { Button, Field, Switch } from '../components/ui'
-import { AvatarPicker, CityPicker, NicknameField } from '../components/ProfileFields'
+import { AvatarPicker, NicknameField } from '../components/ProfileFields'
+import { InterestsField, CityField } from '../components/ProfilePickers'
 import { Loading } from '../components/States'
 import { BackIcon } from '../components/icons'
-import { INTERESTS } from '../data/demo'
 import { useAuth } from '../lib/auth'
 
 // Типы уведомлений из таблицы в ЧТЗ 5.16. Выбор хранится на самом устройстве:
@@ -68,11 +68,6 @@ export default function Settings () {
   }, [profile])
 
   if (!profile) return <PlainScreen title="Настройки"><Loading /></PlainScreen>
-
-  const toggleInterest = (code: string) =>
-    setInterests((list) => list.includes(code)
-      ? list.filter((item) => item !== code)
-      : [...list, code])
 
   const changed = nickname !== profile.nickname
     || city !== profile.city
@@ -141,20 +136,11 @@ export default function Settings () {
             value={nickname}
             onChange={(value) => { setNickname(value); setProfileError('') }}
           />
-          <CityPicker value={city} onChange={(value) => { setCity(value); setProfileError('') }} />
-
-          <p className="pt-1 text-[15px] text-muted">Интересы</p>
-          <div className="flex flex-wrap gap-2.5">
-            {INTERESTS.map(({ code, title }) => (
-              <button
-                key={code} onClick={() => toggleInterest(code)}
-                className={`rounded-2xl px-4 py-2.5 text-[16px] transition ${
-                  interests.includes(code) ? 'bg-accent' : 'border border-white/15'}`}
-              >
-                {title}
-              </button>
-            ))}
-          </div>
+          <CityField value={city} onChange={(value) => { setCity(value); setProfileError('') }} />
+          <InterestsField
+            value={interests}
+            onChange={(value) => { setInterests(value); setProfileError('') }}
+          />
 
           {profileError && <p className="text-[15px] text-red-400">{profileError}</p>}
           {saved && <p className="text-[15px] text-success">Сохранено</p>}

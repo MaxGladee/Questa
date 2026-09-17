@@ -88,34 +88,3 @@ export function AvatarPicker (
     </div>
   )
 }
-
-/** Город: сначала популярные одним касанием, потом ручной ввод. */
-export function CityPicker (
-  { value, onChange }: { value: string; onChange: (value: string) => void },
-) {
-  const custom = value !== '' && !POPULAR_CITIES.includes(value)
-
-  return (
-    <div className="space-y-2">
-      <span className="text-[15px] text-muted">Город</span>
-
-      <div className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5 pb-1">
-        {POPULAR_CITIES.map((city) => (
-          <button
-            key={city} type="button" onClick={() => onChange(city)}
-            className={`shrink-0 rounded-2xl px-4 py-2.5 text-[15px] transition ${
-              value === city ? 'bg-accent' : 'border border-white/15'}`}
-          >
-            {city}
-          </button>
-        ))}
-      </div>
-
-      <Field
-        placeholder="Другой город"
-        value={custom ? value : ''}
-        onChange={(e) => onChange(e.target.value)}
-      />
-    </div>
-  )
-}

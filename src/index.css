@@ -75,6 +75,13 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.02em; }
 @utility animate-message { animation: message-in 240ms ease-out both; }
 @utility animate-pop { animation: pop-in 320ms ease-out both; }
 
+@keyframes sheet-in {
+  from { transform: translateY(100%); }
+  to   { transform: none; }
+}
+
+@utility animate-sheet { animation: sheet-in 240ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
