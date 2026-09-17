@@ -275,68 +275,26 @@ export async function joinEvent (eventId: string, userId: string): Promise<void>
     )
   }
 
-  await openChatIfGroupComplete(eventId)
+  // Чат при наборе группы открывает сама база (триггер open_chat_after_join
+  // из 003_chat_triggers.sql). Из приложения это сделать нельзя: менять
+  // строку ивента разрешено только организатору, а группу добирает участник.
 }
 
 /**
- * Чат открывается сам, как только занято минимальное число слотов, — но
- * только если организатор выбрал автоматический режим (ЧТЗ 5.7, шаг 6).
- * В ручном режиме он ждёт кнопки организатора.
+ * Открытие чата кнопкой организатора (ручной режим, ЧТЗ 5.7).
+ *
+ * Здесь только отметка времени. Приветственное сообщение, объявление о
+ * квесте и уведомления участникам развесит триггер announce_event_change:
+ * иначе они уходили бы по разу на каждое нажатие и на каждый вход в ивент.
  */
-async function openChatIfGroupComplete (eventId: string): Promise<void> {
-  const client = db()
-
-  const { data: event } = await client
-    .from('event').select('min_participants, chat_mode, chat_opened_at').eq('id', eventId).single()
-
-  if (!event || event.chat_opened_at || event.chat_mode !== 'auto') return
-
-  const { count } = await client
-    .from('event_participant').select('id', { count: 'exact', head: true }).eq('event_id', eventId)
-
-  if ((count ?? 0) < event.min_participants) return
-
-  await openChat(eventId)
-}
-
-/** Открытие чата: и автоматическое, и по кнопке организатора. */
 export async function openChat (eventId: string): Promise<void> {
   if (!isLive) return
-  const client = db()
 
-  const { error } = await client.from('event')
+  const { error } = await db().from('event')
     .update({ chat_opened_at: new Date().toISOString() })
     .eq('id', eventId).is('chat_opened_at', null)
 
   if (error) throw error
-
-  await client.from('chat_message').insert({
-    event_id: eventId, user_id: null, kind: 'system', body: 'Группа набрана, чат создан',
-  })
-
-  // Квест подобран ещё при создании ивента, но объявить о нём можно только
-  // теперь — до открытия чата сообщению было некуда прийти.
-  const { data: quest } = await client
-    .from('quest').select('id').eq('event_id', eventId).maybeSingle()
-
-  if (quest) {
-    await client.from('chat_message').insert({
-      event_id: eventId, user_id: null, kind: 'system', body: QUEST_READY,
-    })
-  }
-
-  const [{ data: event }, { data: members }] = await Promise.all([
-    client.from('event').select('title').eq('id', eventId).single(),
-    client.from('event_participant').select('user_id').eq('event_id', eventId),
-  ])
-
-  await notify(
-    (members ?? []).map((member) => member.user_id),
-    'group',
-    'Группа набрана!',
-    `Чат ивента «${event?.title ?? ''}» открыт`,
-    eventId,
-  )
 }
 
 export async function leaveEvent (eventId: string, userId: string): Promise<void> {
@@ -369,25 +327,37 @@ export async function cancelEvent (
     throw new Error('Ивент уже начался — его можно только завершить')
   }
 
+  // Причина сохраняется у ивента: из неё триггер соберёт и сообщение в
+  // чат, и уведомления участникам.
   const { error } = await client.from('event')
-    .update({ status: 'cancelled' }).eq('id', eventId).eq('organizer_id', organizerId)
+    .update({ status: 'cancelled', cancel_reason: reason })
+    .eq('id', eventId).eq('organizer_id', organizerId)
+  if (error) throw error
+}
+
+/**
+ * Запуск ивента организатором (ЧТЗ 4.2.5: «запуск квеста организатором
+ * после начала ивента»).
+ *
+ * Без этого действия ивент навсегда оставался в ожидании, а задания квеста
+ * открываются только у начатого — то есть до них нельзя было добраться.
+ * Решение за организатором, а не по часам: люди опаздывают, и начинать
+ * встречу по таймеру, когда половина ещё в пути, неправильно.
+ */
+export async function startEvent (eventId: string, organizerId: string): Promise<void> {
+  if (!isLive) return
+  const client = db()
+
+  const { error } = await client.from('event')
+    .update({ status: 'in_progress' })
+    .eq('id', eventId).eq('organizer_id', organizerId).eq('status', 'active')
   if (error) throw error
 
-  await client.from('chat_message').insert({
-    event_id: eventId, user_id: null, kind: 'system',
-    body: `Ивент отменён организатором. Причина: ${reason}`,
-  })
+  // Чат мог быть ещё не открыт — например, при ручном режиме.
+  await openChat(eventId).catch(() => {})
 
-  const { data: members } = await client
-    .from('event_participant').select('user_id').eq('event_id', eventId)
-
-  await notify(
-    (members ?? []).map((member) => member.user_id).filter((id) => id !== organizerId),
-    'cancelled',
-    'Ивент отменён',
-    `«${event.title}» не состоится. Причина: ${reason}`,
-    eventId,
-  )
+  // Сообщение «Ивент начался» и уведомления участникам ставит триггер:
+  // системные сообщения приложению писать нечем — у них нет автора.
 }
 
 /** Завершение ивента организатором (ЧТЗ 5.13, триггер 1). */

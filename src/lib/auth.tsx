@@ -18,7 +18,8 @@ interface AuthValue {
   createProfile: (input: ProfileInput) => Promise<void>
   updateProfile: (input: ProfileInput) => Promise<void>
   changePassword: (current: string, next: string) => Promise<void>
-  deleteAccount: () => Promise<void>
+  /** Удаление аккаунта. purged=false — стереть совсем не вышло, аккаунт отключён. */
+  deleteAccount: () => Promise<{ purged: boolean }>
   refreshProfile: () => Promise<void>
 }
 
@@ -37,17 +38,42 @@ export function useAuth () {
   return value
 }
 
+/**
+ * Полное удаление аккаунта серверной функцией. Стереть запись входа из
+ * браузера нельзя — это умеет только ключ, который в код страницы не кладут.
+ * Возвращает, получилось ли: функцию могли ещё не развернуть.
+ */
+async function purgeAccount (): Promise<boolean> {
+  const client = supabase!
+  try {
+    const { data, error } = await client.functions.invoke('delete-account')
+    if (error) return false
+    return Boolean((data as { ok?: boolean } | null)?.ok)
+  } catch {
+    return false
+  }
+}
+
 /** Профиль из базы в вид, который ждут экраны. */
 async function loadProfile (userId: string): Promise<User | null> {
   const client = supabase!
 
   const { data: row } = await client
     .from('app_user')
-    .select('id, nickname, city, avatar_url, qp_balance, exp_total, streak_days, average_rating')
+    .select('id, nickname, city, avatar_url, qp_balance, exp_total, streak_days, average_rating, deleted_at')
     .eq('id', userId)
     .maybeSingle()
 
   if (!row) return null
+
+  // Аккаунт помечен удалённым, но запись входа осталась — значит в прошлый
+  // раз функция удаления была недоступна. Доводим начатое до конца и
+  // выходим: человек просил удалить аккаунт, а не отложить это.
+  if (row.deleted_at) {
+    await purgeAccount()
+    await client.auth.signOut()
+    return null
+  }
 
   const [{ data: interests }, attended, hosted] = await Promise.all([
     client.from('user_interest').select('interest(code)').eq('user_id', userId),
@@ -245,13 +271,21 @@ export function AuthProvider ({ children }: { children: ReactNode }) {
      */
     async deleteAccount () {
       const client = db()
-      if (!profile) return
+      if (!profile) return { purged: true }
 
-      await client.from('app_user')
-        .update({ deleted_at: new Date().toISOString() }).eq('id', profile.id)
+      const purged = await purgeAccount()
+
+      // Функция могла быть ещё не развёрнута. Тогда аккаунт хотя бы
+      // отключается: войти в него уже не выйдет, а стереть его до конца
+      // приложение попробует при следующей попытке входа.
+      if (!purged) {
+        await client.from('app_user')
+          .update({ deleted_at: new Date().toISOString() }).eq('id', profile.id)
+      }
 
       await client.auth.signOut()
       setProfile(null)
+      return { purged }
     },
 
     async refreshProfile () {

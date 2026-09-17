@@ -6,6 +6,7 @@ import { AvatarPicker, NicknameField } from '../components/ProfileFields'
 import { InterestsField, CityField } from '../components/ProfilePickers'
 import { Loading } from '../components/States'
 import { BackIcon } from '../components/icons'
+import { useToast } from '../components/Toast'
 import { useAuth } from '../lib/auth'
 
 // Типы уведомлений из таблицы в ЧТЗ 5.16. Выбор хранится на самом устройстве:
@@ -42,6 +43,7 @@ function Section ({ title, children }: { title: string; children: React.ReactNod
 export default function Settings () {
   const navigate = useNavigate()
   const { profile, updateProfile, changePassword, deleteAccount, signOut } = useAuth()
+  const toast = useToast()
 
   const [nickname, setNickname] = useState('')
   const [city, setCity] = useState('')
@@ -58,6 +60,26 @@ export default function Settings () {
 
   const [notifications, setNotifications] = useState<Record<string, boolean>>(loadNotificationSettings)
   const [confirmingDelete, setConfirmingDelete] = useState(0)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+
+  // Удаление должно либо случиться, либо объяснить, почему нет: молча
+  // возвращать человека на тот же экран — худшее из поведений.
+  async function removeAccount () {
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      const { purged } = await deleteAccount()
+      toast(purged
+        ? 'Аккаунт удалён'
+        : 'Аккаунт отключён: войти в него больше нельзя')
+      navigate('/start')
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : 'Не получилось удалить аккаунт')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   useEffect(() => {
     if (!profile) return
@@ -211,13 +233,15 @@ export default function Settings () {
                   : 'Точно удалить? Нажмите ещё раз, чтобы подтвердить.'}
               </p>
               <button
-                onClick={() => confirmingDelete === 1
-                  ? setConfirmingDelete(2)
-                  : deleteAccount().then(() => navigate('/start'))}
-                className="w-full rounded-[22px] bg-red-500/20 py-3.5 text-[17px] font-semibold text-red-400"
+                disabled={deleting}
+                onClick={() => confirmingDelete === 1 ? setConfirmingDelete(2) : removeAccount()}
+                className="w-full rounded-[22px] bg-red-500/20 py-3.5 text-[17px] font-semibold text-red-400 disabled:opacity-60"
               >
-                {confirmingDelete === 1 ? 'Да, удалить аккаунт' : 'Подтверждаю удаление'}
+                {deleting
+                  ? 'Удаляем…'
+                  : confirmingDelete === 1 ? 'Да, удалить аккаунт' : 'Подтверждаю удаление'}
               </button>
+              {deleteError && <p className="text-[15px] text-red-400">{deleteError}</p>}
               <Button variant="quiet" onClick={() => setConfirmingDelete(0)}>Отмена</Button>
             </div>
           )}

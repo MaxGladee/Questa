@@ -6,7 +6,9 @@ import { Failed, Loading } from '../components/States'
 import { BackIcon, ChevronIcon, PinIcon, StarIcon } from '../components/icons'
 import { Cover } from '../components/Art'
 import { categoryTitle, formatDate, formatTime } from '../data/demo'
-import { cancelEvent, finishEvent, getEvent, joinEvent, leaveEvent, openChat } from '../lib/api'
+import {
+  cancelEvent, finishEvent, getEvent, joinEvent, leaveEvent, openChat, startEvent,
+} from '../lib/api'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
 import { useToast } from '../components/Toast'
@@ -168,6 +170,22 @@ export default function EventDetails () {
               <Button onClick={() => navigate(`/event/${event.id}/quest`)}>
                 Перейти к заданиям
               </Button>
+            )}
+
+            {/* Пока организатор не начал встречу, заданий нет ни у кого. */}
+            {event.myRole === 'organizer' && event.status === 'active' && (
+              <Button onClick={() => act(
+                () => startEvent(event.id, profile!.id),
+                () => { toast('Ивент начался — задания открыты'); reload() },
+              )}>
+                Начать ивент
+              </Button>
+            )}
+
+            {event.myRole === 'participant' && event.status === 'active' && (
+              <p className="rounded-card bg-surface-2 py-3 text-center text-[15px] text-muted">
+                Задания откроются, когда организатор начнёт встречу
+              </p>
             )}
             {event.chatOpened ? (
               <Button
