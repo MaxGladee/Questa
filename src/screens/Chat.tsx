@@ -4,9 +4,10 @@ import { BackIcon, ClipIcon, SparkIcon } from '../components/icons'
 import { Failed, Loading } from '../components/States'
 import type { ChatMessage } from '../data/demo'
 import {
-  QUEST_READY, chatImageUrl, getEvent, getQuest, listMessages, sendMessage,
-  subscribeMessages, uploadImage,
+  QUEST_READY, chatImageUrl, fileComplaint, getEvent, getQuest, listMessages,
+  sendMessage, subscribeMessages, uploadImage,
 } from '../lib/api'
+import { ReportSheet } from '../components/ReportSheet'
 import { shrinkImage } from '../lib/image'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
@@ -36,6 +37,20 @@ export default function Chat () {
   const bottom = useRef<HTMLDivElement>(null)
   const filePicker = useRef<HTMLInputElement>(null)
   const toast = useToast()
+
+  // Жалоба открывается долгим нажатием на чужое сообщение — так это
+  // устроено в мессенджерах, и обычный тап ничего не задевает.
+  const [reported, setReported] = useState<ChatMessage | null>(null)
+  const pressTimer = useRef<number | null>(null)
+
+  function holdStart (message: ChatMessage) {
+    pressTimer.current = window.setTimeout(() => setReported(message), 550)
+  }
+
+  function holdEnd () {
+    if (pressTimer.current) window.clearTimeout(pressTimer.current)
+    pressTimer.current = null
+  }
 
   const { data: event } = useAsync(() => getEvent(id!, profile?.id ?? null), [id, profile?.id])
   const { data: quest } = useAsync(() => getQuest(id!, profile?.id ?? null), [id, profile?.id])
@@ -104,6 +119,28 @@ export default function Chat () {
     }
   }
 
+  const reportSheet = reported && profile && (
+    <ReportSheet
+      title="Пожаловаться"
+      targets={[
+        { key: 'message', label: 'На сообщение' },
+        { key: 'user', label: 'На автора' },
+      ]}
+      onClose={() => setReported(null)}
+      onSubmit={async ({ reason, comment, target }) => {
+        await fileComplaint({
+          authorId: profile.id,
+          targetMessageId: target === 'message' ? reported.id : undefined,
+          targetUserId: target === 'user' ? reported.authorId ?? undefined : undefined,
+          reason,
+          comment,
+        })
+        setReported(null)
+        toast('Жалоба отправлена модерации')
+      }}
+    />
+  )
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <header className="flex items-center gap-3 px-4 pb-2 pt-3">
@@ -161,6 +198,10 @@ export default function Chat () {
           return (
             <div
               key={message.id}
+              onPointerDown={() => { if (!mine) holdStart(message) }}
+              onPointerUp={holdEnd}
+              onPointerLeave={holdEnd}
+              onContextMenu={(e) => { if (!mine) { e.preventDefault(); setReported(message) } }}
               className={`animate-message flex ${mine ? 'justify-end' : 'justify-start'}`}
             >
               <div
@@ -254,6 +295,8 @@ export default function Chat () {
         </div>
       </div>
       )}
+
+      {reportSheet}
     </div>
   )
 }

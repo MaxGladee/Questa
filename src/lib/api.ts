@@ -389,6 +389,46 @@ export async function finishEvent (eventId: string, organizerId: string): Promis
   if (error) throw error
 }
 
+// ──────────────────────────── жалобы ─────────────────────────────────
+
+/**
+ * Причины жалоб (ЧТЗ 5.17). Список закрытый: свободное поле заставляет
+ * человека формулировать, а модератора — читать, и жалобы просто не пишут.
+ * Подробности можно добавить комментарием.
+ */
+export const COMPLAINT_REASONS = [
+  'Спам или реклама',
+  'Оскорбления и грубость',
+  'Обман или мошенничество',
+  'Неприемлемый контент',
+  'Небезопасное поведение',
+  'Другое',
+]
+
+export async function fileComplaint (
+  { authorId, targetUserId, targetEventId, targetMessageId, reason, comment }: {
+    authorId: string
+    targetUserId?: string
+    targetEventId?: string
+    targetMessageId?: string
+    reason: string
+    comment?: string
+  },
+): Promise<void> {
+  if (!isLive) return
+
+  const { error } = await db().from('complaint').insert({
+    author_id: authorId,
+    target_user_id: targetUserId ?? null,
+    target_event_id: targetEventId ?? null,
+    target_message_id: targetMessageId ?? null,
+    reason,
+    comment: comment?.trim() || null,
+  })
+
+  if (error) throw error
+}
+
 // ─────────────────── итоги ивента и взаимные оценки ───────────────────
 
 /** Оценки, которые текущий пользователь уже поставил на этом ивенте. */

@@ -7,8 +7,10 @@ import { BackIcon, ChevronIcon, PinIcon, StarIcon } from '../components/icons'
 import { Cover } from '../components/Art'
 import { categoryTitle, formatDate, formatTime } from '../data/demo'
 import {
-  cancelEvent, finishEvent, getEvent, joinEvent, leaveEvent, openChat, startEvent,
+  cancelEvent, fileComplaint, finishEvent, getEvent, joinEvent, leaveEvent,
+  openChat, startEvent,
 } from '../lib/api'
+import { ReportSheet } from '../components/ReportSheet'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
 import { useToast } from '../components/Toast'
@@ -34,6 +36,7 @@ export default function EventDetails () {
   const [cancelling, setCancelling] = useState(false)
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
+  const [reporting, setReporting] = useState(false)
 
   const { data: event, error, loading, reload } = useAsync(
     () => getEvent(id!, profile?.id ?? null), [id, profile?.id],
@@ -258,7 +261,38 @@ export default function EventDetails () {
             )}
           </div>
         )}
+
+        {/* Пожаловаться может любой, кто видит ивент, кроме его организатора. */}
+        {event.myRole !== 'organizer' && (
+          <button
+            onClick={() => setReporting(true)}
+            className="w-full py-2 text-center text-[15px] text-muted"
+          >
+            Пожаловаться
+          </button>
+        )}
       </div>
+
+      {reporting && (
+        <ReportSheet
+          title="Пожаловаться"
+          targets={organizer
+            ? [{ key: 'event', label: 'На ивент' }, { key: 'organizer', label: 'На организатора' }]
+            : [{ key: 'event', label: 'На ивент' }]}
+          onClose={() => setReporting(false)}
+          onSubmit={async ({ reason: cause, comment, target }) => {
+            await fileComplaint({
+              authorId: profile!.id,
+              targetEventId: target === 'event' ? event.id : undefined,
+              targetUserId: target === 'organizer' ? organizer?.id : undefined,
+              reason: cause,
+              comment,
+            })
+            setReporting(false)
+            toast('Жалоба отправлена модерации')
+          }}
+        />
+      )}
 
       {/* Отмена с причиной: участникам важно узнать, почему встречи не будет. */}
       {cancelling && (
