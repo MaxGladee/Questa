@@ -1,9 +1,10 @@
-import { useEffect } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { PlainScreen } from '../components/Layout'
 import { Empty, Failed, Loading } from '../components/States'
 import { BackIcon, BellIcon, FlameIcon, SparkIcon, UserIcon } from '../components/icons'
-import { listNotifications, markNotificationsRead } from '../lib/api'
+import { clearNotifications, listNotifications, markNotificationsRead } from '../lib/api'
+import { useToast } from '../components/Toast'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
 
@@ -13,18 +14,40 @@ const ICON: Record<string, typeof BellIcon> = {
   task: SparkIcon,
 }
 
-/** Центр уведомлений (ЧТЗ 5.16). Открытие помечает всё прочитанным. */
+/**
+ * Центр уведомлений (ЧТЗ 5.16).
+ *
+ * Раньше всё помечалось прочитанным само при открытии — и непрочитанное
+ * нельзя было ни разглядеть, ни оставить на потом. Теперь этим управляет
+ * человек: две кнопки сверху, обе появляются только когда есть что делать.
+ */
 export default function Notifications () {
   const navigate = useNavigate()
   const { profile } = useAuth()
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  const [confirmingClear, setConfirmingClear] = useState(false)
 
   const { data, error, loading, reload } = useAsync(
     () => profile ? listNotifications(profile.id) : Promise.resolve([]), [profile?.id],
   )
 
-  useEffect(() => {
-    if (profile && data?.some((item) => !item.isRead)) markNotificationsRead(profile.id)
-  }, [profile?.id, data])
+  const unread = data?.filter((item) => !item.isRead).length ?? 0
+
+  async function act (work: () => Promise<void>, done: string) {
+    if (!profile || busy) return
+    setBusy(true)
+    try {
+      await work()
+      toast(done)
+      reload()
+    } catch (problem) {
+      toast(problem instanceof Error ? problem.message : 'Не получилось')
+    } finally {
+      setBusy(false)
+      setConfirmingClear(false)
+    }
+  }
 
   return (
     <PlainScreen
@@ -32,6 +55,29 @@ export default function Notifications () {
       left={<button onClick={() => navigate(-1)} aria-label="Назад"><BackIcon className="size-7" /></button>}
     >
       <div className="space-y-3 px-4 pb-10 pt-2">
+        {(data?.length ?? 0) > 0 && (
+          <div className="flex gap-2">
+            <button
+              disabled={busy || unread === 0}
+              onClick={() => act(() => markNotificationsRead(profile!.id), 'Всё прочитано')}
+              className="flex-1 rounded-full bg-surface-2 py-2.5 text-[15px] font-semibold
+                         disabled:opacity-40"
+            >
+              {unread > 0 ? `Прочитать все · ${unread}` : 'Все прочитаны'}
+            </button>
+            <button
+              disabled={busy}
+              onClick={() => confirmingClear
+                ? act(() => clearNotifications(profile!.id), 'Уведомления удалены')
+                : setConfirmingClear(true)}
+              className={`flex-1 rounded-full py-2.5 text-[15px] font-semibold disabled:opacity-40 ${
+                confirmingClear ? 'bg-red-500/20 text-red-300' : 'bg-surface-2 text-red-400/90'}`}
+            >
+              {confirmingClear ? 'Точно удалить?' : 'Удалить все'}
+            </button>
+          </div>
+        )}
+
         {loading && <Loading />}
         {error && <Failed message={error} onRetry={reload} />}
         {!loading && !error && data?.length === 0 && (

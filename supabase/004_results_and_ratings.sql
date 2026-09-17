@@ -195,6 +195,17 @@ after update on event_participant
 for each row execute function announce_check_in();
 
 
+-- ─────────────── уборка в центре уведомлений ───────────────
+--
+-- Читать и помечать прочитанными свои уведомления приложение умело, а
+-- удалять — нет: политики на удаление не было, и кнопка «удалить все»
+-- молча ничего бы не делала.
+
+drop policy if exists delete_own_notifications on notification;
+create policy delete_own_notifications on notification for delete to authenticated
+  using (user_id = auth.uid());
+
+
 -- ─────────────── отметка о выполнении для самопроверки ───────────────
 --
 -- Страница #/health не может заглянуть в список функций базы, поэтому

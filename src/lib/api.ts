@@ -652,6 +652,29 @@ export interface Notification {
   at: string
 }
 
+/**
+ * Уведомления для демонстрационного режима. Хранятся в памяти вкладки:
+ * базы здесь нет, но центр уведомлений должен быть не пустым — иначе на
+ * показе виден только текст «пока тихо».
+ */
+const demoNotifications: Notification[] = [
+  {
+    id: 'n1', type: 'group', title: 'Группа набрана!',
+    body: 'Чат ивента «Вечер караоке» открыт', eventId: 'karaoke',
+    isRead: false, at: 'сегодня, 09:12',
+  },
+  {
+    id: 'n2', type: 'task', title: 'Задание выполнено',
+    body: 'Алексей справился с заданием «Поймать кадр»', eventId: 'karaoke',
+    isRead: false, at: 'сегодня, 09:05',
+  },
+  {
+    id: 'n3', type: 'join', title: 'Заявка на участие',
+    body: 'Кто-то присоединился к ивенту «Игра в DND»', eventId: 'dnd',
+    isRead: true, at: 'вчера, 20:41',
+  },
+]
+
 /** Складывает уведомление в центр уведомлений получателям (ЧТЗ 5.16). */
 async function notify (
   userIds: string[],
@@ -678,7 +701,7 @@ async function notify (
 }
 
 export async function listNotifications (userId: string): Promise<Notification[]> {
-  if (!isLive) return []
+  if (!isLive) return [...demoNotifications]
 
   const { data, error } = await db()
     .from('notification')
@@ -703,7 +726,7 @@ export async function listNotifications (userId: string): Promise<Notification[]
 }
 
 export async function countUnread (userId: string): Promise<number> {
-  if (!isLive) return 0
+  if (!isLive) return demoNotifications.filter((item) => !item.isRead).length
 
   const { count } = await db()
     .from('notification').select('id', { count: 'exact', head: true })
@@ -712,11 +735,25 @@ export async function countUnread (userId: string): Promise<number> {
   return count ?? 0
 }
 
-/** Открытие центра уведомлений помечает всё прочитанным (ЧТЗ 5.8, 5.16). */
+/** Пометить все свои уведомления прочитанными (ЧТЗ 5.16). */
 export async function markNotificationsRead (userId: string): Promise<void> {
-  if (!isLive) return
-  await db().from('notification').update({ is_read: true })
+  if (!isLive) {
+    for (const item of demoNotifications) item.isRead = true
+    return
+  }
+  const { error } = await db().from('notification').update({ is_read: true })
     .eq('user_id', userId).eq('is_read', false)
+  if (error) throw error
+}
+
+/** Очистить центр уведомлений: старые сообщения о прошедших встречах. */
+export async function clearNotifications (userId: string): Promise<void> {
+  if (!isLive) {
+    demoNotifications.length = 0
+    return
+  }
+  const { error } = await db().from('notification').delete().eq('user_id', userId)
+  if (error) throw error
 }
 
 // ───────────────────────────────── чат ──────────────────────────────────
