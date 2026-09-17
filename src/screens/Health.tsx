@@ -56,9 +56,17 @@ export default function Health () {
     const client = db()
     const signedIn = Boolean(session)
 
+    // Важно не «есть ли объект сессии», а есть ли живой токен: именно его
+    // проверяет сервер, и именно он протухает, пока вкладка лежит открытой.
+    const live = (await client.auth.getSession()).data.session
+    const expiresIn = live?.expires_at
+      ? Math.round((live.expires_at * 1000 - Date.now()) / 60_000)
+      : null
+
     add('session', 'Вход выполнен', signedIn ? 'ok' : 'fail',
         signedIn
-          ? (profile?.nickname ?? 'профиль ещё не заполнен')
+          ? `${profile?.nickname ?? 'профиль ещё не заполнен'} · токен `
+            + (expiresIn === null ? 'без срока' : `годен ещё ${expiresIn} мин`)
           : 'без входа справочники и функция закрыты правилами доступа — остальные проверки бессмысленны')
 
     // 1. Связь с базой и справочник интересов.
@@ -152,52 +160,67 @@ export default function Health () {
     setChecks(result)
   }
 
-  /** Отдельной кнопкой: проверка тратит обращение к модели. */
+  /**
+   * Отдельной кнопкой: проверка тратит обращение к модели.
+   *
+   * Запрос отправляется вручную, а не через вспомогательный метод клиента:
+   * так видно, какие заголовки ушли и что именно ответил сервер. Без этого
+   * ошибка выглядит просто числом и её причину приходится угадывать.
+   */
   async function checkAI () {
     setAiBusy(true)
     setAiState({ key: 'ai', title: 'ИИ-генерация квестов', status: 'checking', detail: 'спрашиваем модель…' })
 
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-quest`
+
+    const token = (await db().auth.getSession()).data.session?.access_token
+
+    const report = (status: Status, detail: string) =>
+      setAiState({ key: 'ai', title: 'ИИ-генерация квестов', status, detail })
+
     try {
-      const { data, error } = await db().functions.invoke('generate-quest', {
-        body: {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          apikey: anonKey,
+          authorization: `Bearer ${token ?? anonKey}`,
+        },
+        body: JSON.stringify({
           title: 'Проверка связи',
           description: 'Тестовый запрос со страницы самопроверки',
           category: 'chill',
           address: 'Екатеринбург, Плотинка',
           participants: 3,
           interests: ['coffee'],
-        },
+        }),
       })
 
-      if (error) {
-        const status = (error as { context?: { status?: number } }).context?.status
-        setAiState({
-          key: 'ai', title: 'ИИ-генерация квестов',
-          status: 'warn',
-          detail: status === 401
-            ? 'нужно войти в приложение: функция отвечает только вошедшим'
-            : status === 503
-              ? 'функция работает, но ключ GEMINI_API_KEY не задан в Secrets'
-              : status === 404
-                ? 'функция generate-quest ещё не создана'
-                : `функция ответила ошибкой (${status ?? 'нет кода'}) — квесты будут из шаблонов`,
-        })
+      const raw = await response.text()
+      const token_note = token ? 'токен входа приложен' : 'токена входа нет'
+
+      if (!response.ok) {
+        const hint = {
+          401: 'сервер не принял токен. Проверьте в Supabase: Edge Functions → generate-quest → '
+             + 'Details → выключите «Verify JWT», либо убедитесь, что вход выполнен в этой же вкладке',
+          404: 'функции generate-quest нет — проверьте имя при создании',
+          503: 'функция создана, но ключ GEMINI_API_KEY не задан в Secrets',
+        }[response.status] ?? 'квесты будут браться из шаблонов'
+
+        report('warn', `${response.status}: ${hint} · ${token_note} · ответ: ${raw.slice(0, 160)}`)
         return
       }
 
+      const data = JSON.parse(raw)
       const tasks = Array.isArray(data?.tasks) ? data.tasks.length : 0
-      setAiState({
-        key: 'ai', title: 'ИИ-генерация квестов',
-        status: tasks === 3 ? 'ok' : 'warn',
-        detail: tasks === 3
-          ? `модель придумала квест: ${data.tasks.map((t: { title: string }) => t.title).join(', ')}`
-          : 'ответ пришёл, но не в нужном виде — сработает запасной шаблон',
-      })
+
+      report(tasks === 3 ? 'ok' : 'warn',
+        tasks === 3
+          ? `модель придумала квест: ${data.tasks.map((task: { title: string }) => task.title).join(', ')}`
+          : `ответ пришёл, но не в нужном виде: ${raw.slice(0, 160)}`)
     } catch (cause) {
-      setAiState({
-        key: 'ai', title: 'ИИ-генерация квестов', status: 'fail',
-        detail: cause instanceof Error ? cause.message : 'не удалось вызвать функцию',
-      })
+      report('fail', cause instanceof Error ? cause.message : 'не удалось вызвать функцию')
     } finally {
       setAiBusy(false)
     }
