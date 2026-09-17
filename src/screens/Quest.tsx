@@ -84,7 +84,7 @@ export default function Quest () {
     if (!profile || !id || checkedIn) return
     setBusy(true)
     try {
-      await checkIn(id, profile.id, profile.nickname)
+      await checkIn(id, profile.id)
       await refreshProfile()
       reload()
     } finally {

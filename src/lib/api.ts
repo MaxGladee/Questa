@@ -491,7 +491,7 @@ export async function rateUser (
 }
 
 /** Чек-ин по геолокации: +50 XP и системное сообщение в чат (ЧТЗ 5.9). */
-export async function checkIn (eventId: string, userId: string, nickname: string): Promise<void> {
+export async function checkIn (eventId: string, userId: string): Promise<void> {
   if (!isLive) return
   const client = db()
 
@@ -500,14 +500,11 @@ export async function checkIn (eventId: string, userId: string, nickname: string
     .eq('event_id', eventId).eq('user_id', userId)
   if (error) throw error
 
+  // Об отметке объявит в чате триггер announce_check_in: системное
+  // сообщение приложение отправить не может, у него нет автора.
   await client.from('exp_transaction').insert({
     user_id: userId, amount: 50, reason: 'checkin',
     event_key: `checkin:${eventId}:${userId}`,
-  })
-
-  await client.from('chat_message').insert({
-    event_id: eventId, user_id: null, kind: 'system',
-    body: `📍 ${nickname} отметил присутствие · +50 XP`,
   })
 }
 

@@ -163,6 +163,38 @@ create trigger announce_event_change_after_update
 after update on event
 for each row execute function announce_event_change();
 
+-- ───────────────── отметка о присутствии в чате ─────────────────
+--
+-- Чек-ин виден только на экране ивента, а группе он важнее в чате: по нему
+-- видно, кто уже на месте. Сообщение системное, автора у него нет, поэтому
+-- пишет его тоже база.
+
+create or replace function announce_check_in () returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  who text;
+begin
+  if old.checked_in_at is not null or new.checked_in_at is null then
+    return new;
+  end if;
+
+  select nickname into who from app_user where id = new.user_id;
+
+  insert into chat_message (event_id, user_id, kind, body)
+  values (new.event_id, null, 'system',
+          '📍 ' || coalesce(who, 'Участник') || ' отметил присутствие · +50 XP');
+
+  return new;
+end;
+$$;
+
+drop trigger if exists announce_check_in_after_update on event_participant;
+
+create trigger announce_check_in_after_update
+after update on event_participant
+for each row execute function announce_check_in();
+
+
 -- ─────────────── отметка о выполнении для самопроверки ───────────────
 --
 -- Страница #/health не может заглянуть в список функций базы, поэтому
