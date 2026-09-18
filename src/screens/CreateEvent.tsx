@@ -299,7 +299,7 @@ export default function CreateEvent () {
         {error && <p className="text-[15px] text-red-400">{error}</p>}
 
         <Button onClick={submit} disabled={busy || left === 0}>
-          {busy ? 'Придумываем квест…' : 'Создать ивент'}
+          {busy ? 'Создаём…' : 'Создать ивент'}
         </Button>
       </div>
 

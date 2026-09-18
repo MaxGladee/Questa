@@ -144,6 +144,7 @@ export default function Health () {
     const NEEDED = [
       { key: '003_chat_triggers', title: '003 — чат и системные сообщения' },
       { key: '004_results_and_ratings', title: '004 — итоги и оценки' },
+      { key: '005_quest_at_start', title: '005 — квест при старте встречи' },
     ]
 
     try {
@@ -156,7 +157,7 @@ export default function Health () {
       add('migrations', 'Файлы SQL',
           missing.length === 0 ? 'ok' : 'warn',
           missing.length === 0
-            ? 'все выполнены: 003 и 004'
+            ? `все выполнены: ${NEEDED.length} файла`
             : `не выполнены: ${missing.map((item) => item.title).join(', ')}`)
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause)

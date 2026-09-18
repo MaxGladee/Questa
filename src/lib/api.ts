@@ -1,5 +1,6 @@
 import { db, isLive } from './supabase'
 import { DEFAULT_CITY, cityCenter } from '../data/cities'
+import { distanceMeters } from './geo'
 import type { Venue } from '../data/venues'
 import {
   EVENTS, MESSAGES, CATEGORIES,
@@ -63,7 +64,23 @@ function toEvent (row: Row, viewerId: string | null): QuestaEvent {
   }
 }
 
-export async function listEvents (viewerId: string | null): Promise<QuestaEvent[]> {
+/** Дальше этого от центра города встреча уже не «рядом». */
+const CITY_RADIUS_METERS = 70_000
+
+/**
+ * Список ивентов.
+ *
+ * С городом в запросе остаются только встречи рядом: человеку в Казани
+ * незачем видеть в рекомендациях и на карте екатеринбургские. Отбор идёт по
+ * расстоянию до центра города, а не по названию: у ивента хранятся
+ * координаты, и они не врут, в отличие от текста адреса.
+ *
+ * Свои встречи не отсеиваются никогда — уехал человек в другой город или
+ * записался заранее в чужом, они всё равно его.
+ */
+export async function listEvents (
+  viewerId: string | null, city?: string | null,
+): Promise<QuestaEvent[]> {
   if (!isLive) return EVENTS
 
   const { data, error } = await db()
@@ -72,7 +89,15 @@ export async function listEvents (viewerId: string | null): Promise<QuestaEvent[
     .order('starts_at', { ascending: false })
 
   if (error) throw error
-  return (data ?? []).map((row) => toEvent(row, viewerId))
+
+  const events = (data ?? []).map((row) => toEvent(row, viewerId))
+  if (!city) return events
+
+  const center = cityCenter(city)
+
+  return events.filter((event) =>
+    event.myRole !== 'guest'
+    || distanceMeters(center, [event.lat, event.lng]) <= CITY_RADIUS_METERS)
 }
 
 export async function getEvent (id: string, viewerId: string | null): Promise<QuestaEvent | null> {
@@ -296,7 +321,9 @@ async function saveQuest (
 }
 
 /** Подбор случайного шаблона под категорию ивента (ЧТЗ 5.10). */
-async function buildQuestFromTemplate (eventId: string, categoryId: number) {
+async function buildQuestFromTemplate (
+  eventId: string, categoryId: number, context?: QuestContext | null,
+) {
   const client = db()
 
   const { data: templates } = await client
@@ -311,7 +338,33 @@ async function buildQuestFromTemplate (eventId: string, categoryId: number) {
 
   if (!tasks?.length) return
 
-  await saveQuest(eventId, 'template', template.id, tasks as GeneratedTask[])
+  await saveQuest(eventId, 'template', template.id, withPlace(tasks as GeneratedTask[], context))
+}
+
+/**
+ * Шаблон говорит «дойдите до точки встречи» — одинаково для всех ивентов.
+ * Подставляем в него адрес: запасной квест всё равно останется запасным, но
+ * перестанет выглядеть текстом из ниоткуда.
+ */
+function withPlace (tasks: GeneratedTask[], context?: QuestContext | null): GeneratedTask[] {
+  const place = context?.address?.trim()
+  if (!place) return tasks
+
+  return tasks.map((task) => {
+    if (task.type === 'geolocation') {
+      return { ...task, description: `${task.description} Ориентир — ${place}.` }
+    }
+
+    if (task.type === 'photo') {
+      const prompt = (task.params as { prompt?: string } | undefined)?.prompt ?? task.description
+      return {
+        ...task,
+        params: { ...(task.params ?? {}), prompt: `${prompt}. Место встречи: ${place}` },
+      }
+    }
+
+    return task
+  })
 }
 
 /**
@@ -479,7 +532,7 @@ async function prepareQuest (eventId: string): Promise<void> {
   const { data: category } = await client
     .from('event').select('category_id').eq('id', eventId).maybeSingle()
 
-  if (category) await buildQuestFromTemplate(eventId, category.category_id)
+  if (category) await buildQuestFromTemplate(eventId, category.category_id, context)
 }
 
 /**

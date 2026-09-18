@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { PlainScreen } from '../components/Layout'
 import { Avatar, Button, Chip, Field } from '../components/ui'
 import { Failed, Loading } from '../components/States'
-import { BackIcon, ChevronIcon, FlagIcon, PinIcon, StarIcon } from '../components/icons'
+import { BackIcon, ChevronIcon, FlagIcon, PinIcon, ShareIcon, StarIcon } from '../components/icons'
 import { Cover } from '../components/Art'
 import { categoryTitle, formatDate, formatTime } from '../data/demo'
 import {
@@ -75,19 +75,53 @@ export default function EventDetails () {
     }
   }
 
+  /**
+   * Позвать знакомых. На телефоне открывается системное окно «поделиться»,
+   * на компьютере ссылка просто копируется. Тот, кто перейдёт по ней без
+   * входа, после входа попадёт сразу на этот ивент, а не на главную.
+   */
+  const share = async () => {
+    const link = `${window.location.origin}${import.meta.env.BASE_URL}#/event/${event.id}`
+    const text = `${event.title} — ${formatDate(event.startsAt)}, `
+      + `${formatTime(event.startsAt)}, ${event.address}`
+
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: event.title, text, url: link })
+        return
+      }
+
+      await navigator.clipboard.writeText(link)
+      toast('Ссылка скопирована')
+    } catch {
+      // Отказ в системном окне — не ошибка, человек просто передумал.
+    }
+  }
+
   return (
     <PlainScreen
       left={<button onClick={() => navigate(-1)} aria-label="Назад"><BackIcon className="size-7" /></button>}
-      right={event.myRole !== 'organizer' ? (
-        // Жалоба стоит отдельно от действий с самим ивентом: рядом с
-        // «покинуть» её слишком легко нажать не глядя.
-        <button
-          onClick={() => setReporting(true)} aria-label="Пожаловаться"
-          className="grid size-10 place-items-center rounded-full bg-surface-2 text-red-400/80"
-        >
-          <FlagIcon className="size-5" />
-        </button>
-      ) : undefined}
+      right={(
+        <span className="flex items-center gap-2">
+          <button
+            onClick={share} aria-label="Поделиться ивентом"
+            className="grid size-10 place-items-center rounded-full bg-surface-2"
+          >
+            <ShareIcon className="size-5" />
+          </button>
+
+          {/* Жалоба стоит отдельно от действий с самим ивентом: рядом с
+              «покинуть» её слишком легко нажать не глядя. */}
+          {event.myRole !== 'organizer' && (
+            <button
+              onClick={() => setReporting(true)} aria-label="Пожаловаться"
+              className="grid size-10 place-items-center rounded-full bg-surface-2 text-red-400/80"
+            >
+              <FlagIcon className="size-5" />
+            </button>
+          )}
+        </span>
+      )}
     >
       <div className="space-y-4 px-4 pb-8">
         <div className="relative">

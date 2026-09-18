@@ -78,7 +78,7 @@ export default function Home () {
   const guard = useAutofillGuard()
 
   const { data: events, error, loading, reload } = useAsync(
-    () => listEvents(profile?.id ?? null), [profile?.id],
+    () => listEvents(profile?.id ?? null, profile?.city), [profile?.id, profile?.city],
   )
 
   const { data: unread } = useAsync(

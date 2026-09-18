@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button, Field, PasswordField } from '../components/ui'
 import { useAuth } from '../lib/auth'
+import { takeDestination } from '../App'
 
 export default function Login () {
   const navigate = useNavigate()
@@ -15,7 +16,7 @@ export default function Login () {
     setBusy(true)
     try {
       await signIn(email.trim(), password)
-      navigate('/')
+      navigate(takeDestination() ?? '/')
     } catch {
       setError('Неверная почта или пароль')
     } finally {

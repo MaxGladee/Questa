@@ -39,10 +39,37 @@ function RequireAuth ({ children }: { children: ReactNode }) {
 
   if (!isLive) return <>{children}</>          // демонстрационный режим без входа
   if (!ready) return <Loading label="Открываем Questa…" />
-  if (!session) return <Navigate to="/start" replace />
+
+  if (!session) {
+    // Человек пришёл по ссылке на ивент, но ещё не вошёл. Запоминаем, куда
+    // он шёл: после входа приложение откроет именно этот экран, а не главную.
+    rememberDestination(pathname)
+    return <Navigate to="/start" replace />
+  }
   if (!profile && pathname !== '/interests') return <Navigate to="/interests" replace />
 
   return <>{children}</>
+}
+
+const DESTINATION_KEY = 'questa:after-login'
+
+/** Куда вернуть человека после входа, если он шёл по ссылке. */
+export function rememberDestination (path: string) {
+  try {
+    if (path && path !== '/') sessionStorage.setItem(DESTINATION_KEY, path)
+  } catch {
+    // Приватный режим запрещает хранилище: просто откроется главная.
+  }
+}
+
+export function takeDestination (): string | null {
+  try {
+    const path = sessionStorage.getItem(DESTINATION_KEY)
+    if (path) sessionStorage.removeItem(DESTINATION_KEY)
+    return path
+  } catch {
+    return null
+  }
 }
 
 /**

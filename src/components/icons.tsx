@@ -174,3 +174,11 @@ export const EyeOffIcon = ({ className }: IconProps) => (
     <path d="M10 10.2a3 3 0 0 0 4 4.2" />
   </svg>
 )
+
+export const ShareIcon = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" className={className} {...stroke}>
+    <path d="M12 3.5v11" />
+    <path d="M8.5 7 12 3.5 15.5 7" />
+    <path d="M6.5 11H5v9.5h14V11h-1.5" />
+  </svg>
+)

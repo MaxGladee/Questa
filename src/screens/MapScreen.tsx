@@ -25,7 +25,9 @@ import { cityCenter } from '../data/cities'
 
 export default function MapScreen () {
   const { profile } = useAuth()
-  const { data } = useAsync(() => listEvents(profile?.id ?? null), [profile?.id])
+  const { data } = useAsync(
+    () => listEvents(profile?.id ?? null, profile?.city), [profile?.id, profile?.city],
+  )
   // Отменённые и завершённые на карте не нужны — туда уже не придёшь.
   const events: QuestaEvent[] = (data ?? []).filter(
     (event) => event.status === 'active' || event.status === 'in_progress',
