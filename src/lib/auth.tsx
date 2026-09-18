@@ -13,6 +13,8 @@ interface AuthValue {
   /** Регистрация. Возвращает, нужно ли подтверждать почту кодом. */
   signUp: (email: string, password: string) => Promise<{ needsCode: boolean }>
   verifyCode: (email: string, code: string) => Promise<void>
+  /** Прислать код подтверждения ещё раз. */
+  resendCode: (email: string) => Promise<void>
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
   createProfile: (input: ProfileInput) => Promise<void>
@@ -176,6 +178,11 @@ export function AuthProvider ({ children }: { children: ReactNode }) {
 
     async verifyCode (email, code) {
       const { error } = await db().auth.verifyOtp({ email, token: code, type: 'email' })
+      if (error) throw error
+    },
+
+    async resendCode (email) {
+      const { error } = await db().auth.resend({ type: 'signup', email: email.trim() })
       if (error) throw error
     },
 
