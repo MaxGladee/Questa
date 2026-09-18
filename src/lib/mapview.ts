@@ -103,10 +103,18 @@ function yandexMap (api: any, container: HTMLElement, options: MapOptions): MapV
     location: { center: [options.center[1], options.center[0]], zoom: options.zoom },
     behaviors: options.interactive === false
       ? []
-      : ['drag', 'pinchZoom', 'scrollZoom', 'dblClick', 'magnifier'],
+      : ['drag', 'pinchZoom', 'scrollZoom', 'dblClick'],
   })
 
-  map.addChild(new YMapDefaultSchemeLayer({ theme: 'dark', customization: MAP_STYLE }))
+  // Своё оформление — вещь необязательная: если правила не подойдут
+  // библиотеке, лучше показать обычную тёмную схему, чем остаться без
+  // карты вовсе.
+  try {
+    map.addChild(new YMapDefaultSchemeLayer({ theme: 'dark', customization: MAP_STYLE }))
+  } catch {
+    map.addChild(new YMapDefaultSchemeLayer({ theme: 'dark' }))
+  }
+
   map.addChild(new YMapDefaultFeaturesLayer({}))
 
   // Своего геттера центра у карты нет, поэтому запоминаем его сами: он

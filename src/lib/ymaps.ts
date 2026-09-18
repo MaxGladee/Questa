@@ -21,32 +21,58 @@ type Ymaps = any
 
 let loading: Promise<Ymaps | null> | null = null
 
+/**
+ * Почему карта Яндекса не поднялась, если не поднялась.
+ *
+ * Молчаливый откат на OpenStreetMap — худший вид отказа: карта вроде есть,
+ * а почему она не та, понять неоткуда. Причина запоминается здесь, и её
+ * показывает страница самопроверки (#/health).
+ */
+export let mapFailure = ''
+
+function message (cause: unknown): string {
+  if (cause instanceof Error) return cause.message
+  return typeof cause === 'string' ? cause : 'причина неизвестна'
+}
+
 export function loadYmaps (): Promise<Ymaps | null> {
-  if (!YANDEX_KEY) return Promise.resolve(null)
+  if (!YANDEX_KEY) {
+    mapFailure = 'ключ не задан в сборке'
+    return Promise.resolve(null)
+  }
   if (loading) return loading
 
   loading = new Promise<Ymaps | null>((resolve) => {
-    const done = (value: Ymaps | null) => {
+    const done = (value: Ymaps | null, reason = '') => {
       clearTimeout(timer)
+      mapFailure = value ? '' : reason
       resolve(value)
     }
 
-    const timer = setTimeout(() => done(null), TIMEOUT)
+    const timer = setTimeout(
+      () => done(null, `библиотека не ответила за ${TIMEOUT / 1000} с`), TIMEOUT,
+    )
 
     const ready = () => {
       const api = (window as unknown as { ymaps3?: Ymaps }).ymaps3
-      if (!api) return done(null)
-      api.ready.then(() => done(api), () => done(null))
+      if (!api) return done(null, 'скрипт загрузился, но ymaps3 не появился')
+
+      api.ready.then(
+        () => done(api),
+        (cause: unknown) => done(null, `ymaps3.ready отказал: ${message(cause)}`),
+      )
     }
 
     if ((window as unknown as { ymaps3?: Ymaps }).ymaps3) return ready()
 
     const script = document.createElement('script')
-    script.src = `https://api-maps.yandex.ru/v3/?apikey=${encodeURIComponent(YANDEX_KEY)}`
+    // Адрес именно такой: /3.0/, а не /v3/. По второму приходит 404, скрипт
+    // молча не грузится, и карта уходит на запасной движок.
+    script.src = `https://api-maps.yandex.ru/3.0/?apikey=${encodeURIComponent(YANDEX_KEY)}`
       + '&lang=ru_RU'
     script.async = true
     script.onload = ready
-    script.onerror = () => done(null)
+    script.onerror = () => done(null, 'скрипт не загрузился: проверьте ключ и ограничение по домену')
     document.head.appendChild(script)
   })
 

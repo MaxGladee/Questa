@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Button } from '../components/ui'
 import { verifyPhoto } from '../lib/api'
 import { db, isLive } from '../lib/supabase'
+import { YANDEX_KEY, loadYmaps, mapFailure } from '../lib/ymaps'
 import { useAuth } from '../lib/auth'
 
 /**
@@ -44,6 +45,8 @@ export default function Health () {
   const [photoBusy, setPhotoBusy] = useState(false)
   const [providers, setProviders] = useState<Check[]>([])
   const [providersBusy, setProvidersBusy] = useState(false)
+  const [mapState, setMapState] = useState<Check | null>(null)
+  const [mapBusy, setMapBusy] = useState(false)
 
   useEffect(() => { void runChecks() }, [session?.user.id])
 
@@ -220,6 +223,39 @@ export default function Health () {
     }
 
     setChecks(result)
+  }
+
+  /**
+   * Карта: поднимается ли Яндекс или работает запасной OpenStreetMap.
+   *
+   * Отличить их на глаз можно, но не сразу, а причина отката (нет ключа,
+   * не тот домен в ограничении, кончилась квота) в интерфейсе не видна
+   * вообще. Здесь она называется прямо.
+   */
+  async function checkMap () {
+    setMapBusy(true)
+    setMapState({ key: 'map', title: 'Карта Яндекса', status: 'checking', detail: 'загружаем библиотеку…' })
+
+    if (!YANDEX_KEY) {
+      setMapState({
+        key: 'map', title: 'Карта Яндекса', status: 'warn',
+        detail: 'ключ не задан в сборке — карта работает на OpenStreetMap',
+      })
+      setMapBusy(false)
+      return
+    }
+
+    const api = await loadYmaps()
+
+    setMapState({
+      key: 'map',
+      title: 'Карта Яндекса',
+      status: api ? 'ok' : 'fail',
+      detail: api
+        ? `библиотека загружена, ключ …${YANDEX_KEY.slice(-6)} принят`
+        : `${mapFailure || 'не загрузилась'} · сейчас карта на OpenStreetMap`,
+    })
+    setMapBusy(false)
   }
 
   /**
@@ -448,7 +484,7 @@ export default function Health () {
     }
   }
 
-  const all = [...checks, ...providers, aiState, photoState].filter(Boolean) as Check[]
+  const all = [...checks, ...providers, mapState, aiState, photoState].filter(Boolean) as Check[]
 
   return (
     <div className="no-scrollbar h-full overflow-y-auto px-5 pb-10 pt-6">
@@ -494,6 +530,9 @@ export default function Health () {
 
       <div className="mt-6 space-y-3">
         <Button variant="ghost" onClick={runChecks}>Проверить заново</Button>
+        <Button variant="ghost" disabled={mapBusy} onClick={checkMap}>
+          {mapBusy ? 'Загружаем карту…' : 'Проверить карту Яндекса'}
+        </Button>
         <Button variant="ghost" disabled={providersBusy} onClick={checkProviders}>
           {providersBusy ? 'Опрашиваем…' : 'Проверить поставщиков модели'}
         </Button>
