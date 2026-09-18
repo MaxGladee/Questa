@@ -24,10 +24,31 @@ import Anthropic from 'npm:@anthropic-ai/sdk@0.126.0'
 // Ключ Claude задаётся отдельной переменной окружения. Нет ключа — функция
 // работает как раньше, через Gemini: развёртывание можно обновить заранее,
 // а ключ добавить потом.
-const CLAUDE_KEY = Deno.env.get('ANTHROPIC_API_KEY')
+//
+// Значение чистится перед использованием. При копировании в поле секрета к
+// ключу легко прилипает перевод строки, пробел или кавычки — сервер в ответ
+// говорит «ключ недействителен», и человек ищет проблему не там.
+const CLAUDE_KEY = (Deno.env.get('ANTHROPIC_API_KEY') ?? '')
+  .trim()
+  .replace(/^["']|["']$/g, '')
+
 const CLAUDE_MODEL = Deno.env.get('CLAUDE_MODEL') ?? 'claude-opus-5'
 
 const claude = CLAUDE_KEY ? new Anthropic({ apiKey: CLAUDE_KEY }) : null
+
+/**
+ * Подсказка по виду ключа. Настоящий ключ к API начинается с sk-ant-api;
+ * если там что-то другое, дело не в оплате и не в модели, а в том, что
+ * скопировали не то — и сказать об этом лучше сразу.
+ */
+function keyHint (): string {
+  if (!CLAUDE_KEY) return 'ключ не задан'
+  if (!CLAUDE_KEY.startsWith('sk-ant-')) {
+    return `ключ не похож на ключ к API (начинается с «${CLAUDE_KEY.slice(0, 7)}…», `
+      + 'а должен с «sk-ant-api»)'
+  }
+  return `ключ вида sk-ant, длина ${CLAUDE_KEY.length}`
+}
 
 // Схема ответа для квеста (structured outputs).
 //
@@ -546,7 +567,7 @@ Deno.serve(async (request) => {
         if (verdict) return json({ ...verdict, model: CLAUDE_MODEL })
       } catch (cause) {
         // Отказ Claude — не конец: ниже пробуем запасную модель.
-        console.error('claude photo failed', cause)
+        console.error('claude photo failed', cause, keyHint())
       }
     }
 
@@ -572,7 +593,9 @@ Deno.serve(async (request) => {
       if (quest) return json({ ...quest, model: CLAUDE_MODEL })
     } catch (cause) {
       console.error('claude quest failed', cause)
-      failures.push(`${CLAUDE_MODEL}: ${cause instanceof Error ? cause.message : cause}`)
+      failures.push(
+        `${CLAUDE_MODEL}: ${cause instanceof Error ? cause.message : cause} · ${keyHint()}`,
+      )
     }
   }
 
