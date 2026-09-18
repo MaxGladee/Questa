@@ -3,7 +3,9 @@ import { Link, useNavigate } from 'react-router-dom'
 import { PlainScreen } from '../components/Layout'
 import { Empty, Failed, Loading } from '../components/States'
 import { BackIcon, BellIcon, ClockIcon, FlagIcon, FlameIcon, SparkIcon, UserIcon } from '../components/icons'
-import { clearNotifications, listNotifications, markNotificationsRead } from '../lib/api'
+import {
+  clearNotifications, listNotifications, markNotificationRead, markNotificationsRead,
+} from '../lib/api'
 import { useToast } from '../components/Toast'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
@@ -90,6 +92,15 @@ export default function Notifications () {
 
         {data?.map((item) => {
           const Icon = ICON[item.type] ?? BellIcon
+
+          /**
+           * Нажатие само снимает отметку «непрочитано»: человек его уже
+           * прочёл. Список при этом не перезагружается — экран всё равно
+           * сменяется, а на обратном пути данные подтянутся заново.
+           */
+          const open = () => {
+            if (!item.isRead) markNotificationRead(item.id).catch(() => {})
+          }
           const content = (
             <div
               className={`flex gap-3 rounded-card p-4 ${
@@ -109,8 +120,24 @@ export default function Notifications () {
           )
 
           return item.eventId
-            ? <Link key={item.id} to={`/event/${item.eventId}`} className="block">{content}</Link>
-            : <div key={item.id}>{content}</div>
+            ? (
+                <Link
+                  key={item.id} to={`/event/${item.eventId}`} onClick={open}
+                  className="block"
+                >
+                  {content}
+                </Link>
+              )
+            : (
+                // Уведомлению без ивента идти некуда, но прочитанным оно
+                // тоже должно становиться от нажатия.
+                <button
+                  key={item.id} onClick={() => { open(); reload() }}
+                  className="block w-full text-left"
+                >
+                  {content}
+                </button>
+              )
         })}
       </div>
     </PlainScreen>

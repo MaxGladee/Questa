@@ -154,10 +154,12 @@ export default function MapScreen () {
 
     const markers = venues.map((place) => instance.marker({
       at: [place.lat, place.lng],
+      // Тёмный кружок со светлым ободком: на фиолетовой карте значок без
+      // обводки теряется так же, как терялись метки ивентов.
       html: `<span style="display:grid;place-items:center;width:30px;height:30px;
-                          border-radius:999px;background:#1B1235;font-size:15px;
-                          border:1px solid rgba(255,255,255,.18);
-                          box-shadow:0 2px 8px rgb(0 0 0 / .45)">
+                          border-radius:999px;background:#120A2B;font-size:15px;
+                          border:1.5px solid rgb(255 255 255 / .45);
+                          box-shadow:0 3px 8px rgb(0 0 0 / .6)">
                ${placeEmoji(place.kind)}
              </span>`,
       size: [30, 30],

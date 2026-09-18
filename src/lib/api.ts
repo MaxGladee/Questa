@@ -1373,6 +1373,25 @@ export async function markNotificationsRead (userId: string): Promise<void> {
   if (error) throw error
 }
 
+/**
+ * Пометить прочитанным одно уведомление.
+ *
+ * Нужно при нажатии: человек его уже прочёл, раз открыл — оставлять
+ * непрочитанным неправильно, а кнопка «прочитать все» рядом для другого
+ * случая, когда разбирать список целиком не хочется.
+ */
+export async function markNotificationRead (id: string): Promise<void> {
+  if (!isLive) {
+    const item = demoNotifications.find((entry) => entry.id === id)
+    if (item) item.isRead = true
+    return
+  }
+
+  const { error } = await db().from('notification')
+    .update({ is_read: true }).eq('id', id).eq('is_read', false)
+  if (error) throw error
+}
+
 /** Очистить центр уведомлений: старые сообщения о прошедших встречах. */
 export async function clearNotifications (userId: string): Promise<void> {
   if (!isLive) {

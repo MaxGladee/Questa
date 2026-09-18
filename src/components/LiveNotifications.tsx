@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { BellIcon, FlameIcon, SparkIcon, UserIcon } from './icons'
 import { Avatar } from './ui'
 import {
-  chatImageUrl, listEvents, subscribeMessages, subscribeNotifications,
+  chatImageUrl, listEvents, markNotificationRead, subscribeMessages, subscribeNotifications,
   type Notification,
 } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
@@ -25,6 +25,8 @@ interface Banner {
   to: string
   /** Адрес, на котором плашку показывать не нужно — человек и так там. */
   quietOn?: string
+  /** Строка уведомления в базе: по нажатию её нужно пометить прочитанной. */
+  notificationId?: string
   type: string
   avatar?: { name: string; src?: string }
 }
@@ -87,6 +89,7 @@ export function LiveNotifications () {
       to: item.eventId ? `/event/${item.eventId}` : '/notifications',
       quietOn: '/notifications',
       type: item.type,
+      notificationId: item.id,
     }))
   }, [profile?.id])
 
@@ -121,7 +124,13 @@ export function LiveNotifications () {
   return (
     <div className="pointer-events-none absolute inset-x-3 top-3 z-[70]">
       <button
-        onClick={() => { setShown(null); navigate(shown.to) }}
+        onClick={() => {
+          // Плашку открыли — значит прочитали: в колокольчике она не должна
+          // остаться непрочитанной.
+          if (shown.notificationId) markNotificationRead(shown.notificationId).catch(() => {})
+          setShown(null)
+          navigate(shown.to)
+        }}
         className="animate-sheet pointer-events-auto flex w-full items-center gap-3 rounded-card
                    bg-surface-3 p-3.5 text-left shadow-2xl ring-1 ring-accent/40"
       >
