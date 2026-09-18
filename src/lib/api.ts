@@ -1726,6 +1726,26 @@ export async function sendMessage (eventId: string, userId: string, body: string
 }
 
 /** Подписка на новые сообщения ивента — это и есть «чат в реальном времени». */
+/**
+ * Лента одного чата: одна подписка на встречу, сколько бы экранов её ни
+ * слушало.
+ *
+ * Раньше каждый слушатель заводил свою — и приложение падало. Всплывающие
+ * плашки подписаны на чаты своих встреч постоянно; стоило открыть чат
+ * такой встречи, как второй слушатель просил тот же канал, а Supabase
+ * отвечает «cannot add postgres_changes callbacks after subscribe()»:
+ * канал с таким именем уже работает, добавлять к нему обработчики поздно.
+ *
+ * Поэтому канал заводится один раз на встречу, слушатели складываются
+ * рядом, а закрывается он, когда уходит последний.
+ */
+interface ChatFeed {
+  channel: ReturnType<ReturnType<typeof db>['channel']>
+  listeners: Set<(message: ChatMessage) => void>
+}
+
+const chatFeeds = new Map<string, ChatFeed>()
+
 export function subscribeMessages (
   eventId: string,
   onMessage: (message: ChatMessage) => void,
@@ -1733,26 +1753,49 @@ export function subscribeMessages (
   if (!isLive) return () => {}
 
   const client = db()
-  const channel = client
-    .channel(`chat:${eventId}`)
-    .on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'chat_message', filter: `event_id=eq.${eventId}` },
-      async ({ new: row }) => {
-        // В событии приходит только сама строка, без имени автора — дочитываем.
-        const author = (row as Row).user_id
-        let profile: Row | null = null
-        if (author) {
-          const { data } = await client
-            .from('app_user').select('nickname, avatar_url').eq('id', author).maybeSingle()
-          profile = data
-        }
-        onMessage(toMessage({ ...(row as Row), app_user: profile }))
-      },
-    )
-    .subscribe()
+  let feed = chatFeeds.get(eventId)
 
-  return () => { client.removeChannel(channel) }
+  if (!feed) {
+    const listeners = new Set<(message: ChatMessage) => void>()
+
+    const channel = client
+      .channel(`chat:${eventId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'chat_message', filter: `event_id=eq.${eventId}` },
+        async ({ new: row }) => {
+          // В событии приходит только сама строка, без имени автора — дочитываем.
+          const author = (row as Row).user_id
+          let profile: Row | null = null
+          if (author) {
+            const { data } = await client
+              .from('app_user').select('nickname, avatar_url').eq('id', author).maybeSingle()
+            profile = data
+          }
+
+          const message = toMessage({ ...(row as Row), app_user: profile })
+          for (const listener of listeners) listener(message)
+        },
+      )
+      .subscribe()
+
+    feed = { channel, listeners }
+    chatFeeds.set(eventId, feed)
+  }
+
+  feed.listeners.add(onMessage)
+  const current = feed
+
+  return () => {
+    current.listeners.delete(onMessage)
+
+    // Последний слушатель ушёл — канал больше не нужен. Держать его
+    // открытым значит платить сокетом за встречу, которую никто не смотрит.
+    if (current.listeners.size === 0) {
+      chatFeeds.delete(eventId)
+      client.removeChannel(current.channel)
+    }
+  }
 }
 
 export function categoryCodes (): CategoryCode[] {
