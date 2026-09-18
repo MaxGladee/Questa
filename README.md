@@ -101,7 +101,8 @@ npm run dev
 ## Порядок выполнения SQL
 
 `supabase/setup.sql` → `002_photos_and_interests.sql` →
-`003_chat_triggers.sql` → `004_results_and_ratings.sql`. Каждый файл можно
+`003_chat_triggers.sql` → `004_results_and_ratings.sql` →
+`005_quest_at_start.sql` → `006_live_notifications.sql`. Каждый файл можно
 выполнять повторно: они переопределяют функции и не дублируют данные.
 
 Начиная с 003 системные сообщения и открытие чата делает сама база.

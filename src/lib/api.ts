@@ -1177,6 +1177,48 @@ export async function clearNotifications (userId: string): Promise<void> {
   if (error) throw error
 }
 
+/**
+ * Подписка на свои уведомления (ЧТЗ 5.16).
+ *
+ * Приложение узнаёт о событии в тот же момент, что и база: строка
+ * появилась — пришло событие. Без этого о заявке или о начале встречи
+ * можно было узнать, только заглянув в колокольчик.
+ */
+export function subscribeNotifications (
+  userId: string,
+  onNotification: (notification: Notification) => void,
+): () => void {
+  if (!isLive) return () => {}
+
+  const client = db()
+  const channel = client
+    .channel(`notifications:${userId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT', schema: 'public', table: 'notification',
+        filter: `user_id=eq.${userId}`,
+      },
+      ({ new: row }) => {
+        const item = row as Row
+        onNotification({
+          id: item.id,
+          type: item.type,
+          title: item.title,
+          body: item.body,
+          eventId: item.payload?.event_id,
+          isRead: item.is_read,
+          at: new Date(item.created_at).toLocaleString('ru-RU', {
+            day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
+          }),
+        })
+      },
+    )
+    .subscribe()
+
+  return () => { client.removeChannel(channel) }
+}
+
 // ───────────────────────────────── чат ──────────────────────────────────
 
 export async function listMessages (eventId: string): Promise<ChatMessage[]> {

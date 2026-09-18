@@ -66,8 +66,11 @@ export default function Profile () {
 
           <div className="relative">
             <Avatar name={profile.nickname} src={profile.avatarUrl} size={130} className="rounded-[28px]" />
-            <span className="absolute -bottom-3 right-2 rounded-full bg-accent px-4 py-1.5
-                             text-[17px] font-bold">
+            {/* Плашка баланса сидит на углу аватара, а не висит рядом:
+                крупная надпись перетягивала на себя весь блок. */}
+            <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 rounded-full
+                             whitespace-nowrap bg-accent px-3.5 py-1 text-[14px] font-bold
+                             ring-4 ring-bg">
               {profile.qpBalance} QP
             </span>
           </div>

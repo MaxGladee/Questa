@@ -145,6 +145,7 @@ export default function Health () {
       { key: '003_chat_triggers', title: '003 — чат и системные сообщения' },
       { key: '004_results_and_ratings', title: '004 — итоги и оценки' },
       { key: '005_quest_at_start', title: '005 — квест при старте встречи' },
+      { key: '006_live_notifications', title: '006 — всплывающие уведомления' },
     ]
 
     try {

@@ -4,6 +4,7 @@ import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'r
 import { PhoneFrame } from './components/Layout'
 import { Loading } from './components/States'
 import { ToastProvider } from './components/Toast'
+import { LiveNotifications } from './components/LiveNotifications'
 import { AuthProvider, useAuth } from './lib/auth'
 import { isLive } from './lib/supabase'
 import Splash from './screens/Splash'
@@ -98,6 +99,11 @@ function Router () {
   // key по адресу заставляет React пересоздать обёртку при переходе,
   // и анимация появления проигрывается заново на каждом экране.
   return (
+    <>
+    {/* Вне ключа по адресу: иначе плашка исчезала бы при каждом переходе
+        и подписка пересоздавалась на каждом экране. */}
+    <LiveNotifications />
+
     <div key={pathname} className="animate-screen h-full">
     <Routes>
       <Route path="/start"      element={<Splash />} />
@@ -128,6 +134,7 @@ function Router () {
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
     </div>
+    </>
   )
 }
 
