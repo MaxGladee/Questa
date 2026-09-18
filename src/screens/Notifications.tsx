@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { PlainScreen } from '../components/Layout'
 import { Empty, Failed, Loading } from '../components/States'
-import { BackIcon, BellIcon, FlameIcon, SparkIcon, UserIcon } from '../components/icons'
+import { BackIcon, BellIcon, ClockIcon, FlagIcon, FlameIcon, SparkIcon, UserIcon } from '../components/icons'
 import { clearNotifications, listNotifications, markNotificationsRead } from '../lib/api'
 import { useToast } from '../components/Toast'
 import { useAsync } from '../lib/useAsync'
@@ -12,6 +12,10 @@ const ICON: Record<string, typeof BellIcon> = {
   join: UserIcon,
   group: FlameIcon,
   task: SparkIcon,
+  reminder: ClockIcon,
+  start: FlameIcon,
+  finish: FlagIcon,
+  cancel: FlagIcon,
 }
 
 /**

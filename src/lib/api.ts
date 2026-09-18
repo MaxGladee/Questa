@@ -24,6 +24,7 @@ const demoCompleted = new Map<string, number>()
 const EVENT_QUERY = `
   id, title, description, cover_url, address, lat, lng, starts_at,
   min_participants, max_participants, status, chat_opened_at, organizer_id,
+  started_at, finished_at, counted, finished_by,
   category:interest (code),
   event_participant (
     user_id, role, checked_in_at,
@@ -58,6 +59,10 @@ function toEvent (row: Row, viewerId: string | null): QuestaEvent {
     minParticipants: row.min_participants,
     maxParticipants: row.max_participants,
     status: row.status,
+    startedAt: row.started_at ?? undefined,
+    finishedAt: row.finished_at ?? undefined,
+    counted: Boolean(row.counted),
+    finishedBy: (row.finished_by ?? undefined) as QuestaEvent['finishedBy'],
     qpReward: 180,
     myRole: mine?.role ?? 'guest',
     chatOpened: Boolean(row.chat_opened_at),
@@ -643,19 +648,76 @@ async function prepareQuest (eventId: string): Promise<QuestOutcome> {
   return { source: 'template', reason: result.reason }
 }
 
+// ───────────────────── завершение и срок жизни встречи ────────────────────
+
+/**
+ * Через сколько часов после начала встреча закрывается сама, и сколько
+ * минимум она должна идти, чтобы попасть в статистику.
+ *
+ * Те же числа зашиты в базе (миграция 008) — там они и решают. Здесь они
+ * нужны, чтобы показать человеку срок заранее, а не после отказа.
+ */
+export const AUTO_FINISH_HOURS = 6
+export const MIN_EVENT_MINUTES = 30
+
+/** Когда встреча закроется сама, если её не завершить руками. */
+export function autoFinishAt (event: QuestaEvent): Date {
+  const began = new Date(event.startedAt ?? event.startsAt).getTime()
+  return new Date(began + AUTO_FINISH_HOURS * 3_600_000)
+}
+
+/**
+ * Пойдёт ли встреча в зачёт, если завершить её прямо сейчас.
+ *
+ * Правило то же, что в базе: начата, идёт не меньше получаса, отметились
+ * хотя бы двое. Проверка повторена здесь не ради надёжности (решает всё
+ * равно база), а чтобы предупредить организатора до нажатия — иначе он
+ * узнаёт об этом из системного сообщения, когда менять уже нечего.
+ */
+export function willCount (event: QuestaEvent): boolean {
+  if (!event.startedAt) return false
+
+  const minutes = (Date.now() - new Date(event.startedAt).getTime()) / 60_000
+  const present = event.participants.filter((person) => person.checkedIn).length
+
+  return minutes >= MIN_EVENT_MINUTES && present >= 2
+}
+
 /**
  * Завершение ивента организатором (ЧТЗ 5.13, триггер 1). Сообщение в чат и
- * приглашение оценить друг друга рассылает триггер announce_event_change.
+ * приглашение оценить друг друга рассылает триггер announce_event_change,
+ * он же объявляет, засчиталась ли встреча.
  */
-export async function finishEvent (eventId: string, organizerId: string): Promise<void> {
-  if (!isLive) return
+export async function finishEvent (
+  eventId: string, organizerId: string,
+): Promise<{ counted: boolean }> {
+  if (!isLive) return { counted: true }
 
-  const { error } = await db().from('event')
-    .update({ status: 'finished' })
+  const { data, error } = await db().from('event')
+    .update({ status: 'finished', finished_by: 'organizer' })
     .eq('id', eventId).eq('organizer_id', organizerId)
     .in('status', ['active', 'in_progress'])
+    .select('counted').maybeSingle()
 
   if (error) throw error
+  return { counted: Boolean(data?.counted) }
+}
+
+/**
+ * Работа по часам: разослать напоминания о скорых встречах и закрыть
+ * просроченные.
+ *
+ * Планировщика в проекте нет, поэтому это делает база по просьбе
+ * приложения — один вызов при запуске. Звучит хрупко, но работает: в
+ * приложение заходят постоянно, а сама работа идемпотентна, так что хоть
+ * десять человек вызовут её одновременно, напоминание уйдёт один раз.
+ * Единственное, чего так не выйдет, — разбудить того, кто приложение не
+ * открывает; для этого нужен pg_cron, и расписание для него оставлено
+ * в миграции 008 комментарием.
+ */
+export async function runEventMaintenance (): Promise<void> {
+  if (!isLive) return
+  await db().rpc('run_event_maintenance').then(undefined, () => {})
 }
 
 // ───────────────── ежедневная награда за вход подряд ──────────────────
@@ -818,9 +880,10 @@ export async function getPublicProfile (userId: string): Promise<PublicProfile> 
 
   const [{ data: interests }, attended, hosted] = await Promise.all([
     client.from('user_interest').select('interest (code)').eq('user_id', userId),
-    client.from('event_participant').select('id', { count: 'exact', head: true })
-      .eq('user_id', userId).not('checked_in_at', 'is', null),
-    client.from('event').select('id', { count: 'exact', head: true }).eq('organizer_id', userId),
+    client.from('event_participant').select('id, event!inner(counted)', { count: 'exact', head: true })
+      .eq('user_id', userId).not('checked_in_at', 'is', null).eq('event.counted', true),
+    client.from('event').select('id', { count: 'exact', head: true })
+      .eq('organizer_id', userId).eq('counted', true),
   ])
 
   return {

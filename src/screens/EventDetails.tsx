@@ -7,8 +7,8 @@ import { BackIcon, ChevronIcon, FlagIcon, PinIcon, ShareIcon, StarIcon } from '.
 import { Cover } from '../components/Art'
 import { categoryTitle, formatDate, formatTime } from '../data/demo'
 import {
-  cancelEvent, fileComplaint, finishEvent, getEvent, joinEvent, leaveEvent,
-  openChat, startEvent,
+  AUTO_FINISH_HOURS, MIN_EVENT_MINUTES, autoFinishAt, cancelEvent, fileComplaint,
+  finishEvent, getEvent, joinEvent, leaveEvent, openChat, startEvent, willCount,
 } from '../lib/api'
 import { ReportSheet } from '../components/ReportSheet'
 import { Lightbox } from '../components/Lightbox'
@@ -27,6 +27,12 @@ const STATUS_LABEL = {
  * Карточка ивента в трёх режимах — гость, участник, организатор (ЧТЗ 5.6).
  * Набор кнопок внизу зависит от роли.
  */
+/** Сколько минут идёт встреча — для предупреждения о раннем завершении. */
+function minutesRunning (event: { startedAt?: string }): number {
+  if (!event.startedAt) return 0
+  return Math.max(0, Math.round((Date.now() - new Date(event.startedAt).getTime()) / 60_000))
+}
+
 export default function EventDetails () {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -35,6 +41,7 @@ export default function EventDetails () {
   const [joining, setJoining] = useState(false)
   const [actionError, setActionError] = useState('')
   const [cancelling, setCancelling] = useState(false)
+  const [finishing, setFinishing] = useState(false)
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [reporting, setReporting] = useState(false)
@@ -334,17 +341,28 @@ export default function EventDetails () {
               </button>
             )}
 
+            {/* Пока встреча идёт, видно, когда она закроется сама: это
+                ответ на «а что будет, если я забуду нажать». */}
+            {event.status === 'in_progress' && (
+              <p className="text-center text-[15px] leading-snug text-muted">
+                Ивент закроется сам в {formatTime(autoFinishAt(event).toISOString())} —
+                через {AUTO_FINISH_HOURS} часов после начала
+              </p>
+            )}
+
             {event.myRole === 'organizer' && started
               && (event.status === 'active' || event.status === 'in_progress') && (
               <button
                 disabled={busy}
-                onClick={() => act(
-                  () => finishEvent(event.id, profile!.id),
-                  () => {
-                    toast('Ивент завершён')
-                    navigate(`/event/${event.id}/summary`)
-                  },
-                )}
+                onClick={() => (willCount(event)
+                  ? act(
+                      () => finishEvent(event.id, profile!.id),
+                      () => {
+                        toast('Ивент завершён')
+                        navigate(`/event/${event.id}/summary`)
+                      },
+                    )
+                  : setFinishing(true))}
                 className="w-full py-2 text-center text-[17px] text-muted"
               >
                 Завершить ивент
@@ -381,6 +399,47 @@ export default function EventDetails () {
       )}
 
       {zoomed && <Lightbox src={zoomed} alt="Обложка ивента" onClose={() => setZoomed(null)} />}
+
+      {/* Завершение раньше срока.
+          Встречу можно закрыть когда угодно — планы меняются. Но в
+          статистику идут только состоявшиеся: иначе «провёл 20 встреч»
+          набивалось бы за вечер, а цифра в профиле перестала бы
+          что-либо значить. Здесь об этом говорится до нажатия. */}
+      {finishing && (
+        <div className="absolute inset-0 z-30 flex items-end bg-black/60 px-4 pb-6">
+          <div className="w-full space-y-4 rounded-[28px] bg-surface p-6">
+            <h2 className="text-center text-[22px]">Завершить сейчас?</h2>
+
+            <p className="text-center text-[16px] leading-snug text-muted">
+              {!event.startedAt
+                ? 'Встречу так и не начали, поэтому она не попадёт ни в вашу статистику, ни в статистику участников.'
+                : minutesRunning(event) < MIN_EVENT_MINUTES
+                  ? `Встреча идёт ${minutesRunning(event)} мин. В зачёт идут ивенты длиннее ${MIN_EVENT_MINUTES} минут — этот в статистику не попадёт.`
+                  : 'Отметились меньше двух человек, поэтому встреча не попадёт в статистику.'}
+            </p>
+
+            <p className="text-center text-[15px] leading-snug text-muted">
+              Очки за уже выполненные задания останутся у всех, и ивент уйдёт в архив.
+            </p>
+
+            {actionError && <p className="text-[15px] text-red-400">{actionError}</p>}
+
+            <Button
+              disabled={busy}
+              onClick={() => act(
+                () => finishEvent(event.id, profile!.id),
+                () => {
+                  toast('Ивент завершён')
+                  navigate(`/event/${event.id}/summary`)
+                },
+              )}
+            >
+              {busy ? 'Завершаем…' : 'Всё равно завершить'}
+            </Button>
+            <Button variant="quiet" onClick={() => setFinishing(false)}>Продолжить встречу</Button>
+          </div>
+        </div>
+      )}
 
       {/* Отмена с причиной: участникам важно узнать, почему встречи не будет. */}
       {cancelling && (

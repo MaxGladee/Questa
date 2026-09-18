@@ -7,6 +7,7 @@ import { ToastProvider } from './components/Toast'
 import { LiveNotifications } from './components/LiveNotifications'
 import { LevelUp } from './components/LevelUp'
 import { AuthProvider, useAuth } from './lib/auth'
+import { runEventMaintenance } from './lib/api'
 import { isLive } from './lib/supabase'
 import Splash from './screens/Splash'
 import Onboarding from './screens/Onboarding'
@@ -93,9 +94,21 @@ function useRecoveryLink () {
   }, [navigate])
 }
 
+/**
+ * Работа по часам — напоминания о скорых встречах и закрытие просроченных.
+ *
+ * Планировщика в Supabase по умолчанию нет, поэтому база делает это по
+ * просьбе приложения: один вызов на запуск. Работа идемпотентна, так что
+ * десять открытых вкладок не дадут десяти напоминаний.
+ */
+function useEventMaintenance () {
+  useEffect(() => { runEventMaintenance() }, [])
+}
+
 function Router () {
   const { pathname } = useLocation()
   useRecoveryLink()
+  useEventMaintenance()
 
   // key по адресу заставляет React пересоздать обёртку при переходе,
   // и анимация появления проигрывается заново на каждом экране.

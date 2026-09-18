@@ -152,6 +152,7 @@ export default function Health () {
       { key: '005_quest_at_start', title: '005 — квест при старте встречи' },
       { key: '006_live_notifications', title: '006 — всплывающие уведомления' },
       { key: '007_achievements', title: '007 — даты получения ачивок' },
+      { key: '008_event_ending', title: '008 — завершение ивента и напоминания' },
     ]
 
     try {

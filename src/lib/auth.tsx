@@ -83,9 +83,13 @@ async function loadProfile (userId: string): Promise<User | null> {
 
   const [{ data: interests }, attended, hosted] = await Promise.all([
     client.from('user_interest').select('interest(code)').eq('user_id', userId),
-    client.from('event_participant').select('id', { count: 'exact', head: true })
-      .eq('user_id', userId).not('checked_in_at', 'is', null),
-    client.from('event').select('id', { count: 'exact', head: true }).eq('organizer_id', userId),
+    // В статистику идут только состоявшиеся встречи: начатые, длиннее
+    // получаса и с двумя отметившимися (миграция 008). Иначе «посетил» и
+    // «провёл» набивались бы созданием и мгновенным завершением ивентов.
+    client.from('event_participant').select('id, event!inner(counted)', { count: 'exact', head: true })
+      .eq('user_id', userId).not('checked_in_at', 'is', null).eq('event.counted', true),
+    client.from('event').select('id', { count: 'exact', head: true })
+      .eq('organizer_id', userId).eq('counted', true),
   ])
 
   return {

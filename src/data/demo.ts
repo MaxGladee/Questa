@@ -123,6 +123,14 @@ export interface QuestaEvent {
   minParticipants: number
   maxParticipants: number
   status: EventStatus
+  /** Когда организатор действительно начал встречу. */
+  startedAt?: string
+  finishedAt?: string
+  /** Пошла ли встреча в статистику: её начали, она шла достаточно долго и
+      на ней отметились хотя бы двое (миграция 008). */
+  counted?: boolean
+  /** Кто закрыл встречу: организатор или таймер. */
+  finishedBy?: 'organizer' | 'auto'
   qpReward: number
   participants: Participant[]
   myRole: 'organizer' | 'participant' | 'guest'
