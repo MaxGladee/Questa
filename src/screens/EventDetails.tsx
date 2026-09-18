@@ -30,11 +30,13 @@ const STATUS_LABEL = {
  * Набор кнопок внизу зависит от роли.
  */
 /**
- * Карандаш рядом с полем.
+ * Карандаш у названия встречи.
  *
  * Кнопка «Изменить» внизу экрана нашлась не сразу: до неё нужно
- * прокрутить мимо участников, описания и организатора. Карандаш стоит там,
- * где смотрят на само значение, и ведёт на ту же форму.
+ * прокрутить мимо участников, описания и организатора. Карандаш стоит в
+ * начале, рядом с названием, и открывает форму целиком — по одному
+ * карандашу у каждого поля получалась рябь из значков там, где человек
+ * просто читает про встречу.
  */
 function EditPencil ({ to, label }: { to: string; label: string }) {
   return (
@@ -223,23 +225,17 @@ export default function EventDetails () {
 
         <div className="flex items-start gap-2">
           <h1 className="min-w-0 flex-1 text-[25px]">{event.title}</h1>
-          {canEdit && <EditPencil to={editTo} label="Изменить название" />}
+          {canEdit && <EditPencil to={editTo} label="Изменить ивент" />}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="flex items-center gap-2 rounded-card bg-surface-2 p-3.5">
-            <div className="min-w-0 flex-1">
-              <p className="text-[15px] text-muted">Дата</p>
-              <p className="text-[18px] font-semibold">{formatDate(event.startsAt)}</p>
-            </div>
-            {canEdit && <EditPencil to={editTo} label="Изменить дату" />}
+          <div className="rounded-card bg-surface-2 p-3.5">
+            <p className="text-[15px] text-muted">Дата</p>
+            <p className="text-[18px] font-semibold">{formatDate(event.startsAt)}</p>
           </div>
-          <div className="flex items-center gap-2 rounded-card bg-surface-2 p-3.5">
-            <div className="min-w-0 flex-1">
-              <p className="text-[15px] text-muted">Время</p>
-              <p className="text-[18px] font-semibold">{formatTime(event.startsAt)}</p>
-            </div>
-            {canEdit && <EditPencil to={editTo} label="Изменить время" />}
+          <div className="rounded-card bg-surface-2 p-3.5">
+            <p className="text-[15px] text-muted">Время</p>
+            <p className="text-[18px] font-semibold">{formatTime(event.startsAt)}</p>
           </div>
         </div>
 
@@ -248,7 +244,6 @@ export default function EventDetails () {
             <p className="text-[15px] text-muted">Место</p>
             <p className="truncate text-[18px] font-semibold">{event.address}</p>
           </div>
-          {canEdit && <EditPencil to={editTo} label="Изменить место" />}
           <Link to="/map" aria-label="Показать на карте">
             <PinIcon className="size-7 text-accent" />
           </Link>
@@ -280,12 +275,9 @@ export default function EventDetails () {
         </div>
 
         {event.description && (
-          <div className="flex items-start gap-2 rounded-card bg-surface-2 p-3.5">
-            <div className="min-w-0 flex-1">
-              <p className="text-[15px] text-muted">Описание</p>
-              <p className="mt-1 text-[17px] leading-snug">{event.description}</p>
-            </div>
-            {canEdit && <EditPencil to={editTo} label="Изменить описание" />}
+          <div className="rounded-card bg-surface-2 p-3.5">
+            <p className="text-[15px] text-muted">Описание</p>
+            <p className="mt-1 text-[17px] leading-snug">{event.description}</p>
           </div>
         )}
 
