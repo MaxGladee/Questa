@@ -4,6 +4,7 @@ import { Button } from '../components/ui'
 import { verifyPhoto } from '../lib/api'
 import { db, isLive } from '../lib/supabase'
 import { YANDEX_KEY, loadYmaps, mapFailure } from '../lib/ymaps'
+import { organizationsAround } from '../lib/organizations'
 import { useAuth } from '../lib/auth'
 
 /**
@@ -46,6 +47,7 @@ export default function Health () {
   const [providers, setProviders] = useState<Check[]>([])
   const [providersBusy, setProvidersBusy] = useState(false)
   const [mapState, setMapState] = useState<Check | null>(null)
+  const [placesState, setPlacesState] = useState<Check | null>(null)
   const [mapBusy, setMapBusy] = useState(false)
 
   useEffect(() => { void runChecks() }, [session?.user.id])
@@ -255,6 +257,27 @@ export default function Health () {
         ? `библиотека загружена, ключ …${YANDEX_KEY.slice(-6)} принят`
         : `${mapFailure || 'не загрузилась'} · сейчас карта на OpenStreetMap`,
     })
+
+    // Справочник организаций — отдельный продукт того же ключа, и
+    // подключён он может быть отдельно. Проверяется поиском вокруг центра
+    // Екатеринбурга: ответ либо есть, либо продукт не включён.
+    setPlacesState({
+      key: 'places', title: 'Справочник организаций', status: 'checking',
+      detail: 'ищем заведения рядом…',
+    })
+
+    const found = await organizationsAround(56.8389, 60.6057)
+
+    setPlacesState({
+      key: 'places',
+      title: 'Справочник организаций',
+      status: found ? 'ok' : 'warn',
+      detail: found
+        ? `нашлось мест: ${found.length}${found[0] ? ` · ближайшее «${found[0].name}»` : ''}`
+        : 'не отвечает — продукт «Поиск по организациям» не подключён к ключу '
+          + 'или кончилась суточная норма. Места рядом ищутся в OpenStreetMap',
+    })
+
     setMapBusy(false)
   }
 
@@ -484,7 +507,8 @@ export default function Health () {
     }
   }
 
-  const all = [...checks, ...providers, mapState, aiState, photoState].filter(Boolean) as Check[]
+  const all = [...checks, ...providers, mapState, placesState, aiState, photoState]
+    .filter(Boolean) as Check[]
 
   return (
     <div className="no-scrollbar h-full overflow-y-auto px-5 pb-10 pt-6">
@@ -531,7 +555,7 @@ export default function Health () {
       <div className="mt-6 space-y-3">
         <Button variant="ghost" onClick={runChecks}>Проверить заново</Button>
         <Button variant="ghost" disabled={mapBusy} onClick={checkMap}>
-          {mapBusy ? 'Загружаем карту…' : 'Проверить карту Яндекса'}
+          {mapBusy ? 'Проверяем…' : 'Проверить карту и справочник Яндекса'}
         </Button>
         <Button variant="ghost" disabled={providersBusy} onClick={checkProviders}>
           {providersBusy ? 'Опрашиваем…' : 'Проверить поставщиков модели'}

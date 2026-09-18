@@ -92,17 +92,45 @@ export function loadYmaps (): Promise<Ymaps | null> {
  * выгружается таким же JSON.
  */
 export const MAP_STYLE = [
-  { tags: 'landscape', elements: 'geometry', stylers: [{ color: '#171036' }] },
-  { tags: 'admin', elements: 'geometry', stylers: [{ color: '#2A2150' }] },
-  { tags: 'water', elements: 'geometry', stylers: [{ color: '#101A3C' }] },
-  { tags: 'park', elements: 'geometry', stylers: [{ color: '#14243A' }] },
-  { tags: 'building', elements: 'geometry', stylers: [{ color: '#241B47' }] },
-  { tags: 'road', elements: 'geometry', stylers: [{ color: '#2E2557' }] },
-  { tags: 'road_minor', elements: 'geometry', stylers: [{ color: '#251D48' }] },
+  // Земля — темнее фона приложения: всё, что на ней лежит, должно читаться
+  // как более светлое. Раньше она была почти одного тона с дорогами, и
+  // карта выглядела однородным пятном.
+  { tags: 'landscape', elements: 'geometry', stylers: [{ color: '#120A2B' }] },
+  { tags: 'land', elements: 'geometry', stylers: [{ color: '#120A2B' }] },
+
+  // Вода заметно синее земли: иначе река и пруд теряются среди кварталов.
+  { tags: 'water', elements: 'geometry', stylers: [{ color: '#0A1747' }] },
+
+  // Зелень — единственный не фиолетовый цвет на карте, и этого достаточно,
+  // чтобы парк было видно с одного взгляда.
+  { tags: 'vegetation', elements: 'geometry', stylers: [{ color: '#123526' }] },
+  { tags: 'park', elements: 'geometry', stylers: [{ color: '#123526' }] },
+
+  // Кварталы: светлее земли, но темнее дорог — получается три различимых
+  // слоя вместо одного.
+  { tags: 'building', elements: 'geometry', stylers: [{ color: '#241B4B' }] },
+
+  // Дороги — самое светлое на карте после меток. По ним считывается
+  // рисунок города, ради этого карта и нужна.
+  { tags: 'road', elements: 'geometry', stylers: [{ color: '#5B4E9C' }] },
+  { tags: 'road_minor', elements: 'geometry', stylers: [{ color: '#3B3070' }] },
   { tags: 'transit', elements: 'geometry', stylers: [{ color: '#2A2150' }] },
-  { tags: 'label', elements: 'label.text.fill', stylers: [{ color: '#C9C2E6' }] },
-  { tags: 'label', elements: 'label.text.outline', stylers: [{ color: '#0F082C' }] },
-  // Чужие точки интереса на карте отвлекают от меток ивентов: их значки
-  // прячем, названия оставляем.
-  { tags: 'poi', elements: 'label.icon', stylers: [{ visibility: 'off' }] },
+  { tags: 'admin', elements: 'geometry', stylers: [{ color: '#2A2150' }] },
+
+  // Подписи: светлее прежнего и с плотной обводкой — мелкий текст на
+  // тёмном иначе расплывается.
+  { tags: 'label', elements: 'label.text.fill', stylers: [{ color: '#E2DCFA' }] },
+  { tags: 'label', elements: 'label.text.outline', stylers: [{ color: '#0B0522' }] },
+
+  // Дальше — прополка. На экране телефона карта города умещается целиком,
+  // и Яндекс подписывает на ней всё подряд: каждый переулок, каждую
+  // станцию, каждое кафе. Из-за этого не видно меток ивентов, а они здесь
+  // главное. Оставляем названия районов, воды, крупных улиц и парков.
+  { tags: 'road_minor', elements: 'label', stylers: [{ visibility: 'off' }] },
+  { tags: 'poi', elements: 'label', stylers: [{ visibility: 'off' }] },
+  { tags: 'transit', elements: 'label', stylers: [{ visibility: 'off' }] },
+  { tags: 'transit_location', elements: 'label', stylers: [{ visibility: 'off' }] },
+  { tags: 'address', elements: 'label', stylers: [{ visibility: 'off' }] },
+  { tags: 'entrance', elements: 'label', stylers: [{ visibility: 'off' }] },
+  { tags: 'building', elements: 'label', stylers: [{ visibility: 'off' }] },
 ]
