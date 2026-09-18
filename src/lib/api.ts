@@ -1077,6 +1077,22 @@ export async function listMyRatings (
 }
 
 /**
+ * Свои оценки самих ивентов: ивент → балл.
+ *
+ * Нужны спискам встреч, чтобы рядом с прошедшей было видно «вы оценили на
+ * 4». Иначе человек открывает итоги, чтобы вспомнить, оценивал он эту
+ * встречу или нет, — а оценка ставится один раз, и второй попытки не будет.
+ */
+export async function myEventRatings (authorId: string): Promise<Record<string, number>> {
+  if (!isLive) return {}
+
+  const { data } = await db().from('rating')
+    .select('event_id, score').eq('author_id', authorId).is('target_user_id', null)
+
+  return Object.fromEntries((data ?? []).map((row: Row) => [row.event_id, row.score]))
+}
+
+/**
  * Оценка участника или самого ивента (ЧТЗ 5.14). Средний балл человека
  * пересчитывает база — приложению чужую строку менять не разрешено.
  *

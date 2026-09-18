@@ -36,8 +36,14 @@ function Stars (
  * Итоги ивента и взаимные оценки (ЧТЗ 5.13, 5.14).
  *
  * Сначала — кто сколько заработал: ради этого и проходили квест. Оценки
- * ниже и ставятся по одной, сразу: анкета «оцените всех и нажмите
- * отправить» заполняется куда хуже, чем пять звёзд напротив имени.
+ * ниже, звёздами напротив имени: анкета «оцените всех и нажмите отправить»
+ * заполняется куда хуже.
+ *
+ * Отправляются они все разом, по кнопке внизу. Раньше нажатие на звезду
+ * сразу уходило в базу и запирало оценку — промахнулся пальцем, и человеку
+ * навсегда поставлено не то, что он заслужил. Теперь до нажатия «Готово»
+ * оценку можно перебирать сколько угодно, а после — уже нет: оценка
+ * ставится один раз, иначе средний балл ничего не значит.
  */
 export default function Summary () {
   const { id } = useParams()
@@ -50,7 +56,10 @@ export default function Summary () {
   )
   const { data: quest } = useAsync(() => getQuest(id!, profile?.id ?? null), [id, profile?.id])
 
+  // given — то, что уже отправлено и больше не меняется; draft — выбор,
+  // который человек ещё перебирает.
   const [given, setGiven] = useState<Record<string, number>>({})
+  const [draft, setDraft] = useState<Record<string, number>>({})
   const [comment, setComment] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -71,33 +80,65 @@ export default function Summary () {
     .map((person) => ({ ...person, qp: earned[person.id] ?? person.qpEarned ?? 0 }))
     .sort((a, b) => b.qp - a.qp)
 
+  const waiting = Object.keys(draft).filter((key) => !given[key]).length
   const mine = table.find((person) => person.id === profile?.id)
   const others = table.filter((person) => person.id !== profile?.id)
   const total = table.reduce((sum, person) => sum + person.qp, 0)
 
-  async function rate (targetUserId: string | null, score: number) {
-    if (!profile || !id || busy) return
+  /** Выбор звезды — пока только в памяти экрана. */
+  function pick (targetUserId: string | null, score: number) {
     const key = targetUserId ?? 'event'
-    if (given[key]) return                       // оценка ставится один раз
+    if (given[key]) return                       // отправленное не меняется
+
+    // Повторное нажатие на ту же звезду снимает выбор: так можно передумать
+    // оценивать вовсе, а не только исправить балл.
+    setDraft((list) => {
+      const next = { ...list }
+      if (next[key] === score) delete next[key]
+      else next[key] = score
+      return next
+    })
+  }
+
+  /**
+   * Отправка всех набранных оценок. Каждая уходит отдельной строкой, и
+   * если часть не прошла, отправленные остаются отправленными — повторный
+   * заход покажет их уже запертыми.
+   */
+  async function send (): Promise<boolean> {
+    if (!profile || !id) return true
+
+    const pending = Object.entries(draft).filter(([key]) => !given[key])
+    if (pending.length === 0) return true
 
     setBusy(true)
-    setGiven((list) => ({ ...list, [key]: score }))
-    try {
-      await rateUser({
-        eventId: id, authorId: profile.id, targetUserId, score,
-        comment: targetUserId === null ? comment : undefined,
-      })
-      toast(targetUserId === null ? 'Спасибо за отзыв' : 'Оценка отправлена')
-    } catch {
-      setGiven((list) => {
-        const next = { ...list }
-        delete next[key]
-        return next
-      })
-      toast('Не удалось отправить оценку')
-    } finally {
-      setBusy(false)
+    let failed = 0
+
+    for (const [key, score] of pending) {
+      try {
+        await rateUser({
+          eventId: id, authorId: profile.id,
+          targetUserId: key === 'event' ? null : key,
+          score,
+          comment: key === 'event' ? comment : undefined,
+        })
+        setGiven((list) => ({ ...list, [key]: score }))
+      } catch {
+        failed += 1
+      }
     }
+
+    setBusy(false)
+
+    if (failed > 0) {
+      toast(failed === pending.length
+        ? 'Не удалось отправить оценки'
+        : 'Часть оценок не ушла — попробуйте ещё раз', 'error')
+      return false
+    }
+
+    toast(pending.length === 1 ? 'Оценка отправлена' : 'Оценки отправлены')
+    return true
   }
 
   return (
@@ -158,9 +199,9 @@ export default function Summary () {
                   {person.nickname}
                 </span>
                 <Stars
-                  value={given[person.id] ?? 0}
+                  value={given[person.id] ?? draft[person.id] ?? 0}
                   disabled={busy || Boolean(given[person.id])}
-                  onPick={(score) => rate(person.id, score)}
+                  onPick={(score) => pick(person.id, score)}
                 />
               </div>
             ))}
@@ -178,14 +219,26 @@ export default function Summary () {
           <div className="flex items-center justify-between rounded-card bg-surface-2 p-3.5">
             <span className="text-[17px]">{given.event ? 'Спасибо за отзыв' : 'Ваша оценка'}</span>
             <Stars
-              value={given.event ?? 0}
+              value={given.event ?? draft.event ?? 0}
               disabled={busy || Boolean(given.event)}
-              onPick={(score) => rate(null, score)}
+              onPick={(score) => pick(null, score)}
             />
           </div>
         </section>
 
-        <Button onClick={() => navigate('/events')}>Готово</Button>
+        {waiting > 0 && (
+          <p className="text-center text-[15px] leading-snug text-muted">
+            Пока можно передумать: звёзды меняются нажатием, а по той же звезде —
+            снимаются. Оценки уйдут по кнопке ниже, и после этого их не изменить.
+          </p>
+        )}
+
+        <Button
+          disabled={busy}
+          onClick={async () => { if (await send()) navigate('/events') }}
+        >
+          {busy ? 'Отправляем…' : waiting > 0 ? `Отправить и закрыть · ${waiting}` : 'Готово'}
+        </Button>
       </div>
     </PlainScreen>
   )

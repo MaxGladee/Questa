@@ -4,6 +4,7 @@ import { Button, Field, TextArea } from '../components/ui'
 import { CalendarIcon, CameraIcon, ClockIcon, CloseIcon, PinIcon } from '../components/icons'
 import LocationPicker from './LocationPicker'
 import { PickerField, Sheet } from '../components/Sheet'
+import { NumberWheel } from '../components/NumberWheel'
 import { CATEGORIES, categoryTitle, formatWhen, type CategoryCode } from '../data/demo'
 import { categoryArt } from '../data/category-art'
 import type { IdeaSuggestion } from '../data/ideas'
@@ -58,8 +59,10 @@ export default function CreateEvent () {
   }
   const [date, setDate] = useState('')
   const [time, setTime] = useState(idea ? `${String(idea.hour).padStart(2, '0')}:00` : '')
-  const [min, setMin] = useState(idea ? String(idea.participants[0]) : '')
-  const [max, setMax] = useState(idea ? String(idea.participants[1]) : '')
+  // Границы состава — числами, а не строками: барабан других значений и
+  // не предлагает, поэтому разбирать введённое больше не нужно.
+  const [min, setMin] = useState(idea?.participants[0] ?? 2)
+  const [max, setMax] = useState(idea?.participants[1] ?? 6)
   const [category, setCategory] = useState<CategoryCode>(idea?.category ?? 'party')
   const [chatMode, setChatMode] = useState<'auto' | 'manual'>('auto')
   const [created, setCreated] = useState<string | null>(null)
@@ -71,10 +74,8 @@ export default function CreateEvent () {
     if (!place) return setError('Выберите место встречи')
     if (!date || !time) return setError('Укажите дату и время')
 
-    const from = Number(min)
-    const to = Number(max)
-    if (!(from >= 2 && from <= 10)) return setError('Минимум участников — от 2 до 10')
-    if (!(to >= from && to <= 10)) return setError('Максимум не меньше минимума и не больше 10')
+    const from = min
+    const to = max
 
     // Дата и время не раньше чем через 30 минут и не позже 7 дней (ЧТЗ 5.5).
     const startsAt = new Date(`${date}T${time}`)
@@ -258,13 +259,20 @@ export default function CreateEvent () {
         <div className="space-y-2">
           <span className="text-[17px]">Участники</span>
           <div className="grid grid-cols-2 gap-3">
-            <Field
-              type="number" min={2} max={10} placeholder="Минимум"
-              value={min} onChange={(e) => setMin(e.target.value)}
+            {/* Барабаны вместо полей ввода: клавиатура для одной цифры
+                избыточна, а меньше двух и больше десяти в них просто нет. */}
+            <NumberWheel
+              label="Минимум" value={min} from={2} to={10}
+              onChange={(value) => {
+                setMin(value)
+                // Максимум не может оказаться ниже минимума — подтягиваем
+                // его сами, вместо того чтобы ругаться на человека потом.
+                if (value > max) setMax(value)
+              }}
             />
-            <Field
-              type="number" min={2} max={10} placeholder="Максимум"
-              value={max} onChange={(e) => setMax(e.target.value)}
+            <NumberWheel
+              label="Максимум" value={max} from={min} to={10}
+              onChange={setMax}
             />
           </div>
         </div>

@@ -4,7 +4,7 @@ import { EventListCard } from '../components/EventCard'
 import { Empty, Failed, Loading } from '../components/States'
 import type { QuestaEvent } from '../data/demo'
 import { useAuth } from '../lib/auth'
-import { listEvents } from '../lib/api'
+import { listEvents, myEventRatings } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
 
 /**
@@ -18,6 +18,13 @@ export default function Events () {
   const { profile } = useAuth()
   const { data, error, loading, reload } = useAsync(
     () => listEvents(profile?.id ?? null), [profile?.id],
+  )
+
+  // Свои оценки встреч — чтобы на карточке было видно, что оценка уже
+  // поставлена. Промах запроса ничего не ломает: подписи просто не будет.
+  const { data: scores } = useAsync(
+    () => profile ? myEventRatings(profile.id) : Promise.resolve<Record<string, number>>({}),
+    [profile?.id],
   )
 
   const mine = (data ?? []).filter((event) => event.myRole !== 'guest')
@@ -65,7 +72,9 @@ export default function Events () {
             <h2 className="text-[17px] text-muted">
               {group.title} · {group.events.length}
             </h2>
-            {group.events.map((event) => <EventListCard key={event.id} event={event} />)}
+            {group.events.map((event) => (
+              <EventListCard key={event.id} event={event} myScore={scores?.[event.id]} />
+            ))}
           </section>
         ))}
       </div>

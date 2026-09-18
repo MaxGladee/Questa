@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { CalendarIcon, ChevronIcon, PinIcon, UserIcon } from './icons'
+import { CalendarIcon, ChevronIcon, PinIcon, StarIcon, UserIcon } from './icons'
 import { Cover } from './Art'
 import { formatDate, formatTime, type EventStatus, type QuestaEvent } from '../data/demo'
 
@@ -12,7 +12,13 @@ const STATUS_LABEL: Partial<Record<EventStatus, string>> = {
 }
 
 /** Карточка ивента в списке — состав элементов задан в ЧТЗ 5.3. */
-export function EventListCard ({ event }: { event: QuestaEvent }) {
+export function EventListCard (
+  { event, myScore }: {
+    event: QuestaEvent
+    /** Балл, который человек уже поставил этой встрече, если оценивал. */
+    myScore?: number
+  },
+) {
   return (
     <Link
       to={`/event/${event.id}`}
@@ -58,6 +64,16 @@ export function EventListCard ({ event }: { event: QuestaEvent }) {
           {event.participants.length} из {event.maxParticipants}
           {event.myRole === 'organizer' ? ' · вы организатор' : ''}
         </span>
+
+        {/* Оценка ставится один раз, поэтому важно видеть, что она уже
+            поставлена, не открывая итоги. */}
+        {myScore !== undefined && (
+          <span className="flex items-center gap-1.5 rounded-xl bg-warning/15 px-3 py-1.5
+                           text-[14px] text-warning">
+            <StarIcon className="size-4" />
+            Вы оценили на {myScore}
+          </span>
+        )}
       </div>
     </Link>
   )
