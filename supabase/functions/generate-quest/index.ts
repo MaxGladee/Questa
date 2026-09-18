@@ -34,7 +34,12 @@ const CLAUDE_KEY = (Deno.env.get('ANTHROPIC_API_KEY') ?? '')
 
 const CLAUDE_MODEL = Deno.env.get('CLAUDE_MODEL') ?? 'claude-opus-5'
 
-const claude = CLAUDE_KEY ? new Anthropic({ apiKey: CLAUDE_KEY }) : null
+// Ключ, не похожий на ключ Anthropic, до сервера не отправляется: запрос
+// всё равно вернёт 401, а в списке причин появится лишняя строка, за
+// которой не видно настоящей.
+const claude = CLAUDE_KEY.startsWith('sk-ant-')
+  ? new Anthropic({ apiKey: CLAUDE_KEY })
+  : null
 
 /**
  * Подсказка по виду ключа. Настоящий ключ к API начинается с sk-ant-api;
@@ -323,6 +328,104 @@ function buildPrompt (ctx: QuestContext): string {
   и тоже про эту встречу, а не «Задание 1».`
 }
 
+// ─────────── сторонний провайдер по протоколу OpenAI ───────────
+//
+// Сюда подключается любой сервис, говорящий на протоколе chat/completions:
+// сам OpenAI, российские агрегаторы, локальная модель. Нужны три значения:
+// адрес, ключ и название модели. Не задан адрес — провайдер просто не
+// участвует, и цепочка работает как прежде.
+const AI_BASE_URL = (Deno.env.get('AI_BASE_URL') ?? '').trim().replace(/\/+$/, '')
+const AI_API_KEY = (Deno.env.get('AI_API_KEY') ?? '').trim().replace(/^["']|["']$/g, '')
+const AI_MODEL = (Deno.env.get('AI_MODEL') ?? '').trim()
+
+const customReady = Boolean(AI_BASE_URL && AI_API_KEY && AI_MODEL)
+
+/**
+ * Запрос к стороннему провайдеру.
+ *
+ * Схема ответа просится через response_format. Не все сервисы его умеют,
+ * поэтому отказ по этой причине не считается провалом: повторяем запрос без
+ * схемы и разбираем ответ сами — модель и так просят вернуть JSON.
+ */
+/**
+ * Адреса, по которым стоит попробовать.
+ *
+ * Одни сервисы дают базовый адрес уже с /v1, другие без него, и человек
+ * копирует то, что написано у них в документации. Промах по этой мелочи
+ * выглядит как «сервис не отвечает», поэтому проверяем оба варианта.
+ */
+function endpoints (): string[] {
+  const urls = [`${AI_BASE_URL}/chat/completions`]
+  if (!/\/v\d+$/.test(AI_BASE_URL)) urls.push(`${AI_BASE_URL}/v1/chat/completions`)
+  return urls
+}
+
+async function askCustom (
+  messages: unknown[], schema: Record<string, unknown>, maxTokens: number,
+): Promise<unknown> {
+  const call = async (withSchema: boolean, url: string) => {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${AI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        max_tokens: maxTokens,
+        messages,
+        ...(withSchema
+          ? {
+              response_format: {
+                type: 'json_schema',
+                json_schema: { name: 'questa', strict: true, schema },
+              },
+            }
+          : {}),
+      }),
+    })
+
+    if (!response.ok) {
+      const detail = (await response.text()).slice(0, 300)
+      throw new Error(`${response.status}: ${detail}`)
+    }
+
+    const data = await response.json()
+    const text = data?.choices?.[0]?.message?.content
+    if (typeof text !== 'string') throw new Error('ответ без содержимого')
+
+    // Некоторые сервисы оборачивают JSON в ```json … ``` — снимаем обёртку.
+    return JSON.parse(text.replace(/^```(?:json)?|```$/g, '').trim())
+  }
+
+  let last: unknown = new Error('нет адреса')
+
+  for (const url of endpoints()) {
+    try {
+      return await call(true, url)
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause)
+
+      // Схему не приняли — повторяем без неё по тому же адресу: JSON модель
+      // всё равно просят вернуть словами.
+      if (/response_format|json_schema|400/i.test(message)) {
+        try {
+          return await call(false, url)
+        } catch (second) {
+          last = second
+          continue
+        }
+      }
+
+      last = cause
+      // 404 — скорее всего промах с /v1: пробуем следующий адрес.
+      if (!/404/.test(message)) break
+    }
+  }
+
+  throw last
+}
+
 /**
  * Ответ по схеме приходит текстом в первом блоке — разбираем его один раз
  * для обоих запросов. Схему гарантирует провайдер, поэтому проверяем только
@@ -399,6 +502,69 @@ async function questWithClaude (ctx: QuestContext) {
       },
     ],
   }
+}
+
+/** Квест от стороннего провайдера — тот же контекст, та же схема. */
+async function questWithCustom (ctx: QuestContext) {
+  if (!customReady) return null
+
+  const quest = await askCustom([
+    { role: 'system', content: 'Ты придумываешь квесты для приложения Questa. Отвечай по-русски и только JSON по схеме.' },
+    { role: 'user', content: buildPrompt(ctx) },
+  ], QUEST_FORMAT.schema, 4000) as {
+    title?: string
+    geo?: { title: string; description: string }
+    photo?: { title: string; description: string; prompt: string }
+    quiz?: { title: string; description: string; questions: unknown[] }
+  } | null
+
+  if (!quest?.geo || !quest?.photo || !quest?.quiz) return null
+
+  return {
+    title: quest.title ?? 'Квест встречи',
+    tasks: [
+      {
+        type: 'geolocation',
+        title: quest.geo.title.slice(0, 60),
+        description: quest.geo.description,
+        qp_reward: REWARDS.geolocation,
+        is_shared: false,
+        params: { radius_meters: 50 },
+      },
+      {
+        type: 'photo',
+        title: quest.photo.title.slice(0, 60),
+        description: quest.photo.description,
+        qp_reward: REWARDS.photo,
+        is_shared: false,
+        params: { prompt: quest.photo.prompt },
+      },
+      {
+        type: 'quiz',
+        title: quest.quiz.title.slice(0, 60),
+        description: quest.quiz.description,
+        qp_reward: REWARDS.quiz,
+        is_shared: true,
+        params: { questions: quest.quiz.questions },
+      },
+    ],
+  }
+}
+
+/** Взгляд стороннего провайдера на снимок. Картинка идёт строкой data:. */
+async function photoWithCustom (prompt: string, image: string) {
+  if (!customReady) return null
+
+  const verdict = await askCustom([{
+    role: 'user',
+    content: [
+      { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${image}` } },
+      { type: 'text', text: photoPrompt(prompt) },
+    ],
+  }], PHOTO_FORMAT.schema, 1000) as { ok?: unknown; reason?: unknown } | null
+
+  if (typeof verdict?.ok !== 'boolean') return null
+  return { ok: verdict.ok, reason: String(verdict.reason ?? '') }
 }
 
 /** Взгляд Claude на снимок — тем же способом, ответ по схеме. */
@@ -545,7 +711,9 @@ Deno.serve(async (request) => {
     })
 
   const apiKey = Deno.env.get('GEMINI_API_KEY')
-  if (!apiKey && !claude) return json({ error: 'Ключ модели не настроен' }, 503)
+  if (!apiKey && !claude && !customReady) {
+    return json({ error: 'Ключ модели не настроен' }, 503)
+  }
 
   let payload: QuestContext | PhotoRequest
   try {
@@ -560,7 +728,17 @@ Deno.serve(async (request) => {
       return json({ error: 'Не хватает снимка или задания' }, 400)
     }
 
-    // Сначала Claude: он и смотрит внимательнее, и отвечает по схеме.
+    // Первым — подключённый вручную провайдер, если он настроен.
+    if (customReady) {
+      try {
+        const verdict = await photoWithCustom(request.prompt, request.image)
+        if (verdict) return json({ ...verdict, model: AI_MODEL })
+      } catch (cause) {
+        console.error('custom photo failed', cause)
+      }
+    }
+
+    // Затем Claude: он и смотрит внимательнее, и отвечает по схеме.
     if (claude) {
       try {
         const verdict = await photoWithClaude(request.prompt, request.image)
@@ -586,7 +764,18 @@ Deno.serve(async (request) => {
   // тому, что видно в приложении.
   const failures: string[] = []
 
-  // Основная модель. Её отказ не роняет запрос: ниже остаётся Gemini.
+  // Подключённый вручную провайдер идёт первым: его выбрали осознанно.
+  if (customReady) {
+    try {
+      const quest = await questWithCustom(ctx)
+      if (quest) return json({ ...quest, model: AI_MODEL })
+    } catch (cause) {
+      console.error('custom quest failed', cause)
+      failures.push(`${AI_MODEL}: ${cause instanceof Error ? cause.message : cause}`)
+    }
+  }
+
+  // Следом Claude. Его отказ не роняет запрос: ниже остаётся Gemini.
   if (claude) {
     try {
       const quest = await questWithClaude(ctx)

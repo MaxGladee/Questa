@@ -424,6 +424,8 @@ export default function Health () {
         <Button disabled={aiBusy} onClick={checkAI}>
           {aiBusy ? 'Спрашиваем модель…' : 'Проверить генерацию квеста'}
         </Button>
+        {/* Какой провайдер отвечает — видно в строке результата обеих
+            проверок: там печатается имя модели из ответа функции. */}
         <Button variant="ghost" disabled={photoBusy} onClick={checkPhotoVision}>
           {photoBusy ? 'Показываем картинку…' : 'Проверить разбор фотографии'}
         </Button>
