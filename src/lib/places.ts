@@ -1,6 +1,5 @@
 import type { CategoryCode } from '../data/demo'
 import { distanceMeters } from './geo'
-import { organizationsAround } from './organizations'
 
 /**
  * Что есть рядом с местом встречи.
@@ -11,11 +10,11 @@ import { organizationsAround } from './organizations'
  * сама не может: координаты она выдумает, а проверить их нечем. Поэтому
  * список готовится здесь, а модель только выбирает из него.
  *
- * Источников два. Живому слою «места рядом» на карте отвечает справочник
- * организаций Яндекса: он полнее и знает часы работы. Цель гео-задания
- * ищется в OpenStreetMap — её приложение сохраняет в базу вместе с
- * заданием, а условия бесплатного справочника Яндекса хранить выдачу
- * запрещают. Разные правила — разные источники.
+ * Источник — OpenStreetMap через Nominatim. Справочник организаций
+ * Яндекса знает больше (рубрики, часы работы), но бесплатен он только
+ * неделю, а после — по счёту; строить на нём постоянную часть приложения
+ * нельзя. К тому же его условия запрещают хранить выдачу, а цель
+ * гео-задания уходит в базу вместе с квестом.
  */
 export interface NearbyPlace {
   name: string
@@ -24,12 +23,6 @@ export interface NearbyPlace {
   lat: number
   lng: number
   meters: number
-  /** Часы работы, если их знает справочник. */
-  hours?: string
-  /** Сайт заведения — только у организаций из справочника Яндекса. */
-  url?: string
-  /** Откуда сведения: справочник Яндекса или OpenStreetMap. */
-  source?: 'yandex' | 'osm'
 }
 
 /**
@@ -110,13 +103,6 @@ export async function nearbyPlaces (
  * ивентами.
  */
 export async function venuesAround (lat: number, lng: number): Promise<NearbyPlace[]> {
-  // Справочник Яндекса знает то, чего нет в OpenStreetMap: часы работы,
-  // рубрику, сайт — и вообще полнее по заведениям. Не ответил (продукт не
-  // подключён к ключу, кончилась суточная норма, нет сети) — остаётся
-  // прежний поиск.
-  const business = await organizationsAround(lat, lng)
-  if (business && business.length > 0) return business
-
   return placesAround(lat, lng, ['кафе', 'бар', 'парк'], 0)
 }
 
@@ -169,7 +155,6 @@ async function placesAround (
           lat: point[0],
           lng: point[1],
           meters,
-          source: 'osm',
         })
       }
     } catch {

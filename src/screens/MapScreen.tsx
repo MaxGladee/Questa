@@ -396,16 +396,9 @@ export default function MapScreen () {
               </button>
             </div>
 
-            {venue.hours && (
-              <p className="text-[14px] leading-snug text-white/80">
-                🕒 {venue.hours}
-              </p>
-            )}
-
             <p className="text-[14px] leading-snug text-muted">
-              {venue.source === 'yandex'
-                ? 'Рейтинг и отзывы — в Яндекс.Картах: в API их не отдают, а выдумывать звёзды нельзя.'
-                : 'Место из OpenStreetMap: часов работы и рейтинга там нет — их видно в Яндекс.Картах.'}
+              Рейтинг, отзывы и часы работы — в Яндекс.Картах: в API их не отдают,
+              а выдумывать звёзды нельзя.
             </p>
 
             <a
