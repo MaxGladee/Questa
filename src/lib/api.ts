@@ -26,7 +26,7 @@ const demoCompleted = new Map<string, number>()
 const EVENT_QUERY = `
   id, title, description, cover_url, address, lat, lng, starts_at,
   min_participants, max_participants, status, chat_opened_at, organizer_id,
-  started_at, finished_at, counted, finished_by,
+  started_at, finished_at, counted, finished_by, edits_count,
   category:interest (code),
   event_participant (
     user_id, role, checked_in_at,
@@ -64,6 +64,7 @@ function toEvent (row: Row, viewerId: string | null): QuestaEvent {
     startedAt: row.started_at ?? undefined,
     finishedAt: row.finished_at ?? undefined,
     counted: Boolean(row.counted),
+    editsLeft: Math.max(0, MAX_EVENT_EDITS - (row.edits_count ?? 0)),
     finishedBy: (row.finished_by ?? undefined) as QuestaEvent['finishedBy'],
     qpReward: 180,
     myRole: mine?.role ?? 'guest',
@@ -748,6 +749,14 @@ async function prepareQuest (eventId: string): Promise<QuestOutcome> {
  * Те же числа зашиты в базе (миграция 008) — там они и решают. Здесь они
  * нужны, чтобы показать человеку срок заранее, а не после отказа.
  */
+/**
+ * Сколько раз встречу можно поправить и за сколько до начала запрещён
+ * перенос. Те же числа стоят в базе (миграция 011) — там они и решают;
+ * здесь нужны, чтобы предупредить заранее, а не после отказа.
+ */
+export const MAX_EVENT_EDITS = 5
+export const EDIT_LOCK_MINUTES = 60
+
 export const AUTO_FINISH_HOURS = 6
 export const MIN_EVENT_MINUTES = 30
 
@@ -1215,6 +1224,49 @@ export async function checkIn (eventId: string, userId: string): Promise<void> {
     event_key: `checkin:${eventId}:${userId}`,
   })
 }
+
+/**
+ * Ответы квиза, которые человек уже дал.
+ *
+ * Квиз показывает верный вариант сразу после ответа, и без этой памяти его
+ * можно было переигрывать: вышел, зашёл — и те же вопросы с уже
+ * известными ответами. Теперь каждый ответ лежит отдельной строкой
+ * (миграция 011), и экран продолжает с первого неотвеченного вопроса.
+ */
+export async function listQuizAnswers (
+  taskId: string, userId: string,
+): Promise<{ index: number; correct: boolean }[]> {
+  if (!isLive) return demoQuizAnswers.get(`${taskId}:${userId}`) ?? []
+
+  const { data } = await db().from('quiz_answer')
+    .select('question_index, is_correct').eq('task_id', taskId).eq('user_id', userId)
+
+  return (data ?? []).map((row: Row) => ({ index: row.question_index, correct: row.is_correct }))
+}
+
+/** Ответ на один вопрос. Повторный на тот же вопрос база не примет. */
+export async function saveQuizAnswer (
+  taskId: string, userId: string, index: number, correct: boolean,
+): Promise<void> {
+  if (!isLive) {
+    const key = `${taskId}:${userId}`
+    const list = demoQuizAnswers.get(key) ?? []
+    if (!list.some((item) => item.index === index)) {
+      demoQuizAnswers.set(key, [...list, { index, correct }])
+    }
+    return
+  }
+
+  const { error } = await db().from('quiz_answer')
+    .insert({ task_id: taskId, user_id: userId, question_index: index, is_correct: correct })
+
+  // Дубль — не ошибка: значит на этот вопрос уже отвечали, и первый ответ
+  // остаётся в силе.
+  if (error && !error.message.includes('duplicate key')) throw error
+}
+
+/** Ответы квиза в демонстрационном режиме — в памяти вкладки. */
+const demoQuizAnswers = new Map<string, { index: number; correct: boolean }[]>()
 
 export interface QuestState {
   quest: Quest | null

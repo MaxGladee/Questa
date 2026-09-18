@@ -45,6 +45,9 @@ export default function Quest () {
   const [busy, setBusy] = useState(false)
   const [questNote, setQuestNote] = useState('')
   const [presenceNote, setPresenceNote] = useState('')
+  // Отметка о приходе засчитывается сразу, не дожидаясь перезагрузки
+  // экрана: человек нажал, геопозиция сошлась — значит он на месте.
+  const [presence, setPresence] = useState<'idle' | 'locating' | 'saving' | 'done'>('idle')
 
   const { data: event } = useAsync(() => getEvent(id!, profile?.id ?? null), [id, profile?.id])
   const { data: state, error, loading, reload } = useAsync(
@@ -93,7 +96,8 @@ export default function Quest () {
   }
 
   const tasks = state.quest.tasks
-  const checkedIn = event?.participants.find((person) => person.id === myId)?.checkedIn ?? false
+  const checkedIn = presence === 'done'
+    || (event?.participants.find((person) => person.id === myId)?.checkedIn ?? false)
 
   const board = (event?.participants ?? [])
     .map((person) => ({ ...person, qpEarned: state.earned[person.id] ?? 0 }))
@@ -130,10 +134,10 @@ export default function Quest () {
    * вопросом только в ответ на действие человека.
    */
   async function markPresence () {
-    if (!profile || !id || checkedIn || busy || !event) return
+    if (!profile || !id || checkedIn || presence !== 'idle' || !event) return
 
-    setBusy(true)
-    setPresenceNote('Определяем, где вы…')
+    setPresence('locating')
+    setPresenceNote('')
 
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
@@ -150,24 +154,30 @@ export default function Quest () {
       )
 
       if (away > CHECKIN_RADIUS) {
+        setPresence('idle')
         setPresenceNote(
           `До места встречи ${formatDistance(away)} — отметиться можно, подойдя ближе.`,
         )
         return
       }
 
+      setPresence('saving')
       await checkIn(id, profile.id)
-      await refreshProfile()
+
+      // Кнопка становится отмеченной сразу. Полная перезагрузка экрана
+      // здесь только мешала: список заданий подменялся полосой загрузки, и
+      // казалось, что нажатие не сработало, а отметка появлялась «через
+      // какое-то время сама».
+      setPresence('done')
       setPresenceNote('')
-      reload()
+      refreshProfile().catch(() => {})
     } catch (cause) {
+      setPresence('idle')
       setPresenceNote(
         cause instanceof GeolocationPositionError
           ? geoErrorMessage(cause)
           : cause instanceof Error ? cause.message : 'Не удалось отметиться',
       )
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -178,7 +188,7 @@ export default function Quest () {
     >
       <div className="space-y-6 px-4 pb-10 pt-2">
         <button
-          onClick={markPresence} disabled={busy || checkedIn}
+          onClick={markPresence} disabled={presence !== 'idle' || checkedIn}
           /*
             До отметки это действие, а не подпись: яркая кнопка, которая
             откликается на нажатие. После — спокойная плашка с галочкой:
@@ -200,12 +210,17 @@ export default function Quest () {
 
           <span className="min-w-0 flex-1">
             <span className={`block text-[18px] font-bold ${checkedIn ? 'text-muted' : ''}`}>
-              {checkedIn ? 'Вы пришли' : busy ? 'Проверяем геопозицию…' : 'Я пришёл'}
+              {checkedIn ? 'Вы пришли'
+                : presence === 'locating' ? 'Ищем вас на карте…'
+                : presence === 'saving' ? 'Отмечаем…'
+                : 'Я пришёл'}
             </span>
             <span className={`block text-[15px] ${checkedIn ? 'text-muted' : 'text-white/85'}`}>
               {checkedIn
                 ? 'Компания видит, что вы на месте · +50 XP'
-                : 'Отметка о приходе к началу встречи · +50 XP'}
+                : presence === 'locating'
+                  ? 'Браузер спрашивает у телефона координаты — это пара секунд'
+                  : 'Отметка о приходе к началу встречи · +50 XP'}
             </span>
           </span>
 

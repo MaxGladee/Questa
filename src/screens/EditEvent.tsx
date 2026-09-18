@@ -8,7 +8,7 @@ import { NumberWheel } from '../components/NumberWheel'
 import LocationPicker from './LocationPicker'
 import { CATEGORIES, categoryTitle, formatWhen, type CategoryCode } from '../data/demo'
 import { categoryArt } from '../data/category-art'
-import { getEvent, updateEvent } from '../lib/api'
+import { EDIT_LOCK_MINUTES, MAX_EVENT_EDITS, getEvent, updateEvent } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
 import { useToast } from '../components/Toast'
@@ -91,6 +91,14 @@ function Form (
   const when = date && time ? new Date(`${date}T${time}`) : null
   const past = when !== null && when.getTime() <= Date.now()
 
+  // Правки ограничены нарочно: каждая шлёт уведомление всем участникам, а
+  // перенос за полчаса до начала оставляет ни с чем тех, кто уже вышел из
+  // дома. Те же правила стоят в базе — здесь они только объясняются
+  // заранее, чтобы человек не упёрся в отказ после заполнения формы.
+  const editsLeft = event.editsLeft ?? MAX_EVENT_EDITS
+  const minutesToStart = (new Date(event.startsAt).getTime() - Date.now()) / 60_000
+  const locked = minutesToStart < EDIT_LOCK_MINUTES
+
   async function save () {
     if (title.trim().length < 3) return setProblem('Название — от 3 до 50 символов')
     if (!date || !time) return setProblem('Укажите дату и время')
@@ -141,6 +149,21 @@ function Form (
           <p className="rounded-card bg-surface-2 p-3.5 text-[15px] leading-snug text-muted">
             Записались {joined} человек. О переносе времени, смене места и названия им придёт
             уведомление, а напоминания переставятся на новое время.
+            {editsLeft <= 2 && ` Правок осталось: ${editsLeft} из ${MAX_EVENT_EDITS}.`}
+          </p>
+        )}
+
+        {locked && (
+          <p className="rounded-card bg-yellow-400/15 p-3.5 text-[15px] leading-snug text-yellow-200">
+            До начала меньше часа: время и место уже не поменять — люди в пути. Название и
+            описание поправить можно, а если планы сорвались совсем, встречу лучше отменить.
+          </p>
+        )}
+
+        {editsLeft === 0 && (
+          <p className="rounded-card bg-red-500/15 p-3.5 text-[15px] leading-snug text-red-300">
+            Правки закончились: встречу можно менять не больше {MAX_EVENT_EDITS} раз. Если
+            планы изменились сильнее, её стоит отменить и собрать заново.
           </p>
         )}
 
@@ -163,8 +186,9 @@ function Form (
         <div className="space-y-2">
           <span className="text-[17px]">Место</span>
           <button
-            onClick={() => setPickingPlace(true)}
-            className="flex w-full items-center gap-3 rounded-field bg-field px-4 py-4 text-left"
+            onClick={() => setPickingPlace(true)} disabled={locked}
+            className="flex w-full items-center gap-3 rounded-field bg-field px-4 py-4 text-left
+                       disabled:opacity-50"
           >
             <PinIcon className="size-6 shrink-0 text-accent" />
             <span className="min-w-0 flex-1 truncate text-[17px]">{place.address}</span>
@@ -178,7 +202,7 @@ function Form (
               <CalendarIcon className="size-5 shrink-0 text-muted" />
               <input
                 type="date" lang="ru" value={date} onChange={(e) => setDate(e.target.value)}
-                aria-label="Дата"
+                aria-label="Дата" disabled={locked}
                 className="w-full bg-transparent py-4 text-[17px] outline-none"
               />
             </label>
@@ -186,7 +210,7 @@ function Form (
               <ClockIcon className="size-5 shrink-0 text-muted" />
               <input
                 type="time" lang="ru" value={time} onChange={(e) => setTime(e.target.value)}
-                aria-label="Время"
+                aria-label="Время" disabled={locked}
                 className="w-full bg-transparent py-4 text-[17px] outline-none"
               />
             </label>
@@ -224,7 +248,7 @@ function Form (
         {problem && <p className="text-[15px] text-red-400">{problem}</p>}
 
         <div className="space-y-3 pt-1">
-          <Button disabled={busy || past} onClick={save}>
+          <Button disabled={busy || past || editsLeft === 0} onClick={save}>
             {busy ? 'Сохраняем…' : 'Сохранить изменения'}
           </Button>
           <Button variant="quiet" onClick={onCancel}>Не менять</Button>

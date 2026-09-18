@@ -175,6 +175,14 @@ export const EyeOffIcon = ({ className }: IconProps) => (
   </svg>
 )
 
+export const PencilIcon = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+       strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z" />
+    <path d="M14.5 6.5 17.5 9.5" />
+  </svg>
+)
+
 export const ShareIcon = ({ className }: IconProps) => (
   <svg viewBox="0 0 24 24" className={className} {...stroke}>
     <path d="M12 3.5v11" />

@@ -157,6 +157,9 @@ export function Avatar (
 ) {
   const style = { width: size, height: size }
   // Свой radius в className должен побеждать круглую форму по умолчанию.
+  // Раньше запасное 'rounded-full' стояло и там, где форма уже задана, —
+  // из-за этого нарисованный аватар оставался круглым даже в квадратной
+  // кнопке: у shape пустая строка, и подставлялось запасное значение.
   const shape = className?.includes('rounded') ? '' : 'rounded-full'
 
   const seed = parseAvatarSeed(src)
@@ -164,8 +167,7 @@ export function Avatar (
     return (
       <span
         style={style}
-        className={cx('grid shrink-0 place-items-center overflow-hidden',
-          shape || 'rounded-full', className)}
+        className={cx('grid shrink-0 place-items-center overflow-hidden', shape, className)}
       >
         <GeneratedAvatar seed={seed} size={size} />
       </span>
@@ -186,7 +188,7 @@ export function Avatar (
       style={{ ...style, fontSize: size * 0.42 }}
       className={cx(
         'grid shrink-0 place-items-center bg-accent/70 font-semibold text-white',
-        shape || 'rounded-full', className,
+        shape, className,
       )}
     >
       {name.charAt(0).toUpperCase()}

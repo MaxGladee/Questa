@@ -3,7 +3,9 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { PlainScreen } from '../components/Layout'
 import { Avatar, Button, Chip, Field } from '../components/ui'
 import { Failed, Loading } from '../components/States'
-import { BackIcon, ChevronIcon, FlagIcon, PinIcon, ShareIcon, StarIcon } from '../components/icons'
+import {
+  BackIcon, ChevronIcon, FlagIcon, PencilIcon, PinIcon, ShareIcon, StarIcon,
+} from '../components/icons'
 import { Cover } from '../components/Art'
 import { categoryTitle, formatDate, formatTime } from '../data/demo'
 import {
@@ -27,6 +29,25 @@ const STATUS_LABEL = {
  * Карточка ивента в трёх режимах — гость, участник, организатор (ЧТЗ 5.6).
  * Набор кнопок внизу зависит от роли.
  */
+/**
+ * Карандаш рядом с полем.
+ *
+ * Кнопка «Изменить» внизу экрана нашлась не сразу: до неё нужно
+ * прокрутить мимо участников, описания и организатора. Карандаш стоит там,
+ * где смотрят на само значение, и ведёт на ту же форму.
+ */
+function EditPencil ({ to, label }: { to: string; label: string }) {
+  return (
+    <Link
+      to={to} aria-label={label}
+      className="grid size-9 shrink-0 place-items-center rounded-full bg-white/10 text-accent-soft
+                 transition active:scale-95"
+    >
+      <PencilIcon className="size-5" />
+    </Link>
+  )
+}
+
 /** Сколько минут идёт встреча — для предупреждения о раннем завершении. */
 function minutesRunning (event: { startedAt?: string }): number {
   if (!event.startedAt) return 0
@@ -62,6 +83,12 @@ export default function EventDetails () {
       </PlainScreen>
     )
   }
+
+  // Карандаши показываются только тому, кто может править, и только пока
+  // встреча не началась: после начала менять нечего.
+  const canEdit = event.myRole === 'organizer' && event.status === 'active'
+    && new Date(event.startsAt).getTime() > Date.now()
+  const editTo = `/event/${event.id}/edit`
 
   const organizer = event.participants.find((person) => person.role === 'organizer')
   const full = event.participants.length >= event.maxParticipants
@@ -194,16 +221,25 @@ export default function EventDetails () {
           <Chip tone="accent">{STATUS_LABEL[event.status]}</Chip>
         </div>
 
-        <h1 className="text-[25px]">{event.title}</h1>
+        <div className="flex items-start gap-2">
+          <h1 className="min-w-0 flex-1 text-[25px]">{event.title}</h1>
+          {canEdit && <EditPencil to={editTo} label="Изменить название" />}
+        </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-card bg-surface-2 p-3.5">
-            <p className="text-[15px] text-muted">Дата</p>
-            <p className="text-[18px] font-semibold">{formatDate(event.startsAt)}</p>
+          <div className="flex items-center gap-2 rounded-card bg-surface-2 p-3.5">
+            <div className="min-w-0 flex-1">
+              <p className="text-[15px] text-muted">Дата</p>
+              <p className="text-[18px] font-semibold">{formatDate(event.startsAt)}</p>
+            </div>
+            {canEdit && <EditPencil to={editTo} label="Изменить дату" />}
           </div>
-          <div className="rounded-card bg-surface-2 p-3.5">
-            <p className="text-[15px] text-muted">Время</p>
-            <p className="text-[18px] font-semibold">{formatTime(event.startsAt)}</p>
+          <div className="flex items-center gap-2 rounded-card bg-surface-2 p-3.5">
+            <div className="min-w-0 flex-1">
+              <p className="text-[15px] text-muted">Время</p>
+              <p className="text-[18px] font-semibold">{formatTime(event.startsAt)}</p>
+            </div>
+            {canEdit && <EditPencil to={editTo} label="Изменить время" />}
           </div>
         </div>
 
@@ -212,6 +248,7 @@ export default function EventDetails () {
             <p className="text-[15px] text-muted">Место</p>
             <p className="truncate text-[18px] font-semibold">{event.address}</p>
           </div>
+          {canEdit && <EditPencil to={editTo} label="Изменить место" />}
           <Link to="/map" aria-label="Показать на карте">
             <PinIcon className="size-7 text-accent" />
           </Link>
@@ -243,9 +280,12 @@ export default function EventDetails () {
         </div>
 
         {event.description && (
-          <div className="rounded-card bg-surface-2 p-3.5">
-            <p className="text-[15px] text-muted">Описание</p>
-            <p className="mt-1 text-[17px] leading-snug">{event.description}</p>
+          <div className="flex items-start gap-2 rounded-card bg-surface-2 p-3.5">
+            <div className="min-w-0 flex-1">
+              <p className="text-[15px] text-muted">Описание</p>
+              <p className="mt-1 text-[17px] leading-snug">{event.description}</p>
+            </div>
+            {canEdit && <EditPencil to={editTo} label="Изменить описание" />}
           </div>
         )}
 

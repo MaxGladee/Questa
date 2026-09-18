@@ -171,6 +171,8 @@ export interface QuestaEvent {
   counted?: boolean
   /** Кто закрыл встречу: организатор или таймер. */
   finishedBy?: 'organizer' | 'auto'
+  /** Сколько правок у организатора ещё осталось (миграция 011). */
+  editsLeft?: number
   qpReward: number
   participants: Participant[]
   myRole: 'organizer' | 'participant' | 'guest'

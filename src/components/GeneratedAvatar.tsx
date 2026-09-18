@@ -54,7 +54,11 @@ export function GeneratedAvatar ({ seed, size }: { seed: string; size: number })
 
       {/* Поворот цвета делает палитру своей у каждого, а не одной из дюжины. */}
       <g style={{ filter: `hue-rotate(${look.hueShift}deg)` }}>
-        <rect width="100" height="100" rx="24" fill={`url(#${id})`} />
+        {/* Подложка во весь квадрат, без своих скруглений: форму задаёт
+            обёртка (круг в списках, квадрат в шапке), и она же обрезает
+            лишнее. Со своим радиусом рисунок не совпадал с рамкой —
+            в квадратной кнопке по углам оставались тёмные уголки. */}
+        <rect width="100" height="100" fill={`url(#${id})`} />
         <circle cx={look.blobX} cy={look.blobY} r={look.blobR} fill="#fff" opacity="0.09" />
       </g>
 
