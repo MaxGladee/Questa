@@ -7,6 +7,9 @@ import type { QuestTask } from '../data/demo'
 
 type Stage = 'ask' | 'preview' | 'checking' | 'verdict'
 
+/** Сколько даётся за снимок, засчитанный вопреки отказу модели. */
+export const FORCED_REWARD = 5
+
 /**
  * Задание типа «Фото» (ЧТЗ 5.11.2), с проверкой снимка моделью из ТЗ 4.2.6.
  *
@@ -15,13 +18,18 @@ type Stage = 'ask' | 'preview' | 'checking' | 'verdict'
  * строгостью. Поэтому при отказе видно, чего не хватило, и есть обе кнопки:
  * переснять и засчитать как есть. Если модель недоступна, задание
  * засчитывается по факту загрузки — ровно как описано в ЧТЗ 3.3.
+ *
+ * Но засчитать себе задание вопреки отказу — не то же самое, что выполнить
+ * его: за такой снимок начисляются символические очки, и человек знает об
+ * этом до нажатия, а не узнаёт из баланса.
  */
 export default function PhotoTask (
   { task, userId, onClose, onDone }: {
     task: QuestTask
     userId: string
     onClose: () => void
-    onDone: (photoUrl?: string) => void
+    /** verified — модель подтвердила снимок; от этого зависит награда. */
+    onDone: (result: { photoUrl?: string; verified: boolean }) => void
   },
 ) {
   const camera = useRef<HTMLInputElement>(null)
@@ -149,16 +157,24 @@ export default function PhotoTask (
             )}
 
             {verdict.ok ? (
-              <Button onClick={() => onDone(photoUrl)}>Забрать +{task.qpReward} QP</Button>
+              <Button onClick={() => onDone({ photoUrl, verified: true })}>
+                Забрать +{task.qpReward} QP
+              </Button>
             ) : (
               <>
                 <Button onClick={() => { setStage('ask'); setPreview(undefined) }}>
                   Переснять
                 </Button>
-                {/* Последнее слово за человеком: он был на месте, а модель нет. */}
-                <Button variant="ghost" onClick={() => onDone(photoUrl)}>
-                  Всё равно засчитать
+
+                {/* Последнее слово за человеком: он был на месте, а модель нет.
+                    Но и награда за такой снимок другая — о чём сказано прямо. */}
+                <Button variant="ghost" onClick={() => onDone({ photoUrl, verified: false })}>
+                  Всё равно засчитать · +{FORCED_REWARD} QP
                 </Button>
+                <p className="text-center text-[13px] leading-snug text-muted">
+                  Модель не подтвердила снимок, поэтому начислим {FORCED_REWARD} QP вместо
+                  {' '}{task.qpReward}. Переснимете — получите полную награду.
+                </p>
               </>
             )}
           </>

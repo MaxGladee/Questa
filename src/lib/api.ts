@@ -547,6 +547,8 @@ export async function startEvent (
  * ни одного задания, заменить их безопасно — после первого выполнения уже
  * нет: вместе с заданиями исчезли бы и начисленные очки.
  */
+export const REGENERATE_COST = 5
+
 export async function regenerateQuest (
   eventId: string, organizerId: string,
 ): Promise<QuestOutcome> {
@@ -572,7 +574,29 @@ export async function regenerateQuest (
     }
   }
 
-  return prepareQuest(eventId)
+  // Перепридумывание стоит очков. Не ради экономии, а ради смысла: иначе
+  // кнопку жмут по десять раз подряд, пока не понравится формулировка, и
+  // квест перестаёт быть событием встречи.
+  const { data: wallet } = await client
+    .from('app_user').select('qp_balance').eq('id', organizerId).maybeSingle()
+
+  if ((wallet?.qp_balance ?? 0) < REGENERATE_COST) {
+    throw new Error(`Нужно ${REGENERATE_COST} QP, а на счету ${wallet?.qp_balance ?? 0}`)
+  }
+
+  const outcome = await prepareQuest(eventId)
+
+  // Списываем только за удавшуюся замену: за отказ модели платить не за что.
+  if (outcome.source === 'ai') {
+    await client.from('qp_transaction').insert({
+      user_id: organizerId,
+      amount: -REGENERATE_COST,
+      reason: 'quest:regenerate',
+      event_key: `regen:${eventId}:${Date.now()}`,
+    })
+  }
+
+  return outcome
 }
 
 /** Чем закончился подбор заданий — это видит организатор. */
@@ -816,6 +840,35 @@ export async function getPublicProfile (userId: string): Promise<PublicProfile> 
     }),
     since: monthAndYear(row.created_at),
   }
+}
+
+// ───────────────────────── награда за уровень ─────────────────────────
+
+/** Сколько QP даёт новый уровень: чем дальше, тем весомее. */
+export function levelReward (level: number): number {
+  return Math.min(25 + (level - 2) * 10, 150)
+}
+
+/**
+ * Начисление за взятый уровень.
+ *
+ * Ключ начисления содержит номер уровня, поэтому дважды за один и тот же
+ * уровень очки не придут — даже если приложение спросит об этом повторно
+ * на другом устройстве.
+ */
+export async function claimLevelReward (userId: string, level: number): Promise<number> {
+  const amount = levelReward(level)
+  if (!isLive) return amount
+
+  const { error } = await db().from('qp_transaction').insert({
+    user_id: userId,
+    amount,
+    reason: `level:${level}`,
+    event_key: `level:${userId}:${level}`,
+  })
+
+  if (error && !error.message.includes('duplicate key')) throw error
+  return amount
 }
 
 // ──────────────────────────── жалобы ─────────────────────────────────

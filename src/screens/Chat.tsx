@@ -248,15 +248,15 @@ export default function Chat () {
           if (message.authorId === null && message.body === QUEST_READY
               && quest?.quest && event?.status === 'in_progress') {
             return (
-              <div key={message.id} className="animate-message space-y-2 pt-3">
-                <p className="text-center text-[16px] font-semibold">
-                  <SparkIcon className="mr-1.5 inline size-4 align-[-2px] text-accent" />
-                  {quest.quest.source === 'ai'
-                    ? 'ИИ сгенерировал квест! Проверьте задания ↓'
-                    : message.body}
-                </p>
+              // Подписи над карточкой нет: строкой выше уже стоит системное
+              // «Ивент начался! Задания квеста доступны ↓», и вторая такая же
+              // фраза подряд выглядела повтором.
+              <div key={message.id} className="animate-message pt-3">
                 <Link to={`/event/${id}/quest`} className="block rounded-[22px] bg-surface-2 p-4">
-                  <p className="text-[19px] font-bold text-accent">Ваши задания готовы!</p>
+                  <p className="flex items-center gap-1.5 text-[19px] font-bold text-accent">
+                    <SparkIcon className="size-4 shrink-0" />
+                    {quest.quest.source === 'ai' ? 'ИИ придумал задания' : 'Ваши задания готовы!'}
+                  </p>
                   <ul className="mt-2 space-y-1 text-[17px] leading-snug">
                     {quest.quest.tasks.map((task) => (
                       <li key={task.id}>{task.title}: {task.description}</li>

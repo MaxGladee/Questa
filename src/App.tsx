@@ -5,6 +5,7 @@ import { PhoneFrame } from './components/Layout'
 import { Loading } from './components/States'
 import { ToastProvider } from './components/Toast'
 import { LiveNotifications } from './components/LiveNotifications'
+import { LevelUp } from './components/LevelUp'
 import { AuthProvider, useAuth } from './lib/auth'
 import { isLive } from './lib/supabase'
 import Splash from './screens/Splash'
@@ -103,6 +104,7 @@ function Router () {
     {/* Вне ключа по адресу: иначе плашка исчезала бы при каждом переходе
         и подписка пересоздавалась на каждом экране. */}
     <LiveNotifications />
+    <LevelUp />
 
     <div key={pathname} className="animate-screen h-full">
     <Routes>

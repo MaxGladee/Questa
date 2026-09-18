@@ -7,13 +7,26 @@ import {
   BackIcon, CameraIcon, ChevronIcon, GeoTaskIcon, PinIcon, QuizIcon, SparkIcon,
 } from '../components/icons'
 import type { QuestTask } from '../data/demo'
-import { checkIn, completeTask, getEvent, getQuest, regenerateQuest } from '../lib/api'
+import {
+  REGENERATE_COST, checkIn, completeTask, getEvent, getQuest, regenerateQuest,
+} from '../lib/api'
+import { GEO_QUICK, distanceMeters, formatDistance, geoErrorMessage } from '../lib/geo'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
 import { useCountUp } from '../lib/useCountUp'
 import Quiz from './Quiz'
 import GeoTask from './GeoTask'
-import PhotoTask from './PhotoTask'
+import PhotoTask, { FORCED_REWARD } from './PhotoTask'
+
+/**
+ * На каком расстоянии от точки встречи отметка ещё считается честной.
+ *
+ * Радиус чек-ина по ЧТЗ 5.9 — сто метров, но городская геолокация врёт на
+ * десятки метров даже на улице, а в помещении и того больше. Полторы сотни
+ * оставляют запас на эту погрешность и всё ещё не позволяют отметиться из
+ * дома.
+ */
+const CHECKIN_RADIUS = 150
 
 const TASK_ICON = {
   photo: CameraIcon,
@@ -31,6 +44,7 @@ export default function Quest () {
   const [photoTask, setPhotoTask] = useState<QuestTask | null>(null)
   const [busy, setBusy] = useState(false)
   const [questNote, setQuestNote] = useState('')
+  const [presenceNote, setPresenceNote] = useState('')
 
   const { data: event } = useAsync(() => getEvent(id!, profile?.id ?? null), [id, profile?.id])
   const { data: state, error, loading, reload } = useAsync(
@@ -50,8 +64,9 @@ export default function Quest () {
     try {
       const outcome = await regenerateQuest(id, profile.id)
       setQuestNote(outcome.source === 'ai'
-        ? 'Готово: задания придумал ИИ'
-        : `Не вышло: ${outcome.reason ?? 'модель не ответила'}`)
+        ? `Готово: задания придумал ИИ · −${REGENERATE_COST} QP`
+        : `Не вышло: ${outcome.reason ?? 'модель не ответила'}. Очки не списаны`)
+      await refreshProfile()
       reload()
     } catch (problem) {
       setQuestNote(problem instanceof Error ? problem.message : 'Не получилось')
@@ -104,13 +119,53 @@ export default function Quest () {
     }
   }
 
+  /**
+   * Отметка о присутствии (ЧТЗ 5.9).
+   *
+   * Присутствие проверяется, а не объявляется: приложение спрашивает у
+   * браузера, где человек, и сверяет с точкой встречи. Отметиться из дома
+   * было бы странно — на этом держится смысл и чек-ина, и гео-задания.
+   *
+   * Запрос положения идёт по нажатию: Safari на iPhone показывает окно с
+   * вопросом только в ответ на действие человека.
+   */
   async function markPresence () {
-    if (!profile || !id || checkedIn) return
+    if (!profile || !id || checkedIn || busy || !event) return
+
     setBusy(true)
+    setPresenceNote('Определяем, где вы…')
+
     try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        if (!('geolocation' in navigator)) {
+          reject(new Error('Устройство не умеет определять геопозицию'))
+          return
+        }
+        navigator.geolocation.getCurrentPosition(resolve, reject, GEO_QUICK)
+      })
+
+      const away = distanceMeters(
+        [position.coords.latitude, position.coords.longitude],
+        [event.lat, event.lng],
+      )
+
+      if (away > CHECKIN_RADIUS) {
+        setPresenceNote(
+          `До места встречи ${formatDistance(away)} — отметиться можно, подойдя ближе.`,
+        )
+        return
+      }
+
       await checkIn(id, profile.id)
       await refreshProfile()
+      setPresenceNote('')
       reload()
+    } catch (cause) {
+      setPresenceNote(
+        cause instanceof GeolocationPositionError
+          ? geoErrorMessage(cause)
+          : cause instanceof Error ? cause.message : 'Не удалось отметиться',
+      )
     } finally {
       setBusy(false)
     }
@@ -145,15 +200,19 @@ export default function Quest () {
 
           <span className="min-w-0 flex-1">
             <span className={`block text-[18px] font-bold ${checkedIn ? 'text-muted' : ''}`}>
-              {checkedIn ? 'Вы на месте' : busy ? 'Отмечаем…' : 'Я на месте'}
+              {checkedIn ? 'Вы на месте' : busy ? 'Проверяем геопозицию…' : 'Я на месте'}
             </span>
             <span className={`block text-[15px] ${checkedIn ? 'text-muted' : 'text-white/85'}`}>
-              {checkedIn ? 'Отмечено · +50 XP' : 'Нажмите здесь · +50 XP'}
+              {checkedIn ? 'Отмечено · +50 XP' : 'Нужно быть у места встречи · +50 XP'}
             </span>
           </span>
 
           {!checkedIn && <ChevronIcon className="size-5 shrink-0 text-white/70" />}
         </button>
+
+        {presenceNote && (
+          <p className="-mt-1 px-1 text-[14px] leading-snug text-muted">{presenceNote}</p>
+        )}
 
         <div className="flex items-end justify-between rounded-card bg-surface-2 p-5">
           <div className="min-w-0 flex-1">
@@ -238,7 +297,9 @@ export default function Quest () {
               className="w-full rounded-card bg-surface-2 py-3 text-center text-[15px]
                          text-accent-soft disabled:opacity-50"
             >
-              {busy ? 'Придумываем заново…' : 'Перепридумать задания через ИИ'}
+              {busy
+                ? 'Придумываем заново…'
+                : `Перепридумать задания через ИИ · ${REGENERATE_COST} QP`}
             </button>
             {questNote && (
               <p className="text-center text-[14px] leading-snug text-muted">{questNote}</p>
@@ -284,8 +345,13 @@ export default function Quest () {
           task={photoTask}
           userId={profile.id}
           onClose={() => setPhotoTask(null)}
-          onDone={(photoUrl) => {
-            finish(photoTask, photoTask.qpReward, undefined, photoUrl)
+          onDone={({ photoUrl, verified }) => {
+            finish(
+              photoTask,
+              verified ? photoTask.qpReward : FORCED_REWARD,
+              undefined,
+              photoUrl,
+            )
             setPhotoTask(null)
           }}
         />
