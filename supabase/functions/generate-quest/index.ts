@@ -1,5 +1,11 @@
 // ИИ-генерация квеста по контексту ивента (ТЗ 4.2.6).
 //
+// Моделей две. Основная — Claude: он точнее держится инструкций и умеет
+// отдавать ответ строго по схеме (structured outputs), поэтому «ответ не
+// разобрался» перестаёт быть отдельным видом отказа. Запасная — Gemini,
+// на случай если у Claude нет ключа, он перегружен или отказал. Если молчат
+// обе, приложение собирает задания само из контекста встречи.
+//
 // Функция выполняется на стороне Supabase, а не в браузере: ключ модели не
 // должен попадать в код приложения, иначе его увидит любой, кто откроет
 // страницу. Клиент присылает контекст встречи, получает готовый квест.
@@ -9,6 +15,51 @@
 // правильного ответа за пределами списка вариантов. Всё это отсекается здесь
 // («валидация ответа модели» из ТЗ 4.2.6). Если проверка не прошла, клиент
 // берёт шаблон из коллекции — квест у ивента будет в любом случае.
+
+import Anthropic from 'npm:@anthropic-ai/sdk'
+import { z } from 'npm:zod'
+import { zodOutputFormat } from 'npm:@anthropic-ai/sdk/helpers/zod'
+
+// Ключ Claude задаётся отдельной переменной окружения. Нет ключа — функция
+// работает как раньше, через Gemini: развёртывание можно обновить заранее,
+// а ключ добавить потом.
+const CLAUDE_KEY = Deno.env.get('ANTHROPIC_API_KEY')
+const CLAUDE_MODEL = Deno.env.get('CLAUDE_MODEL') ?? 'claude-opus-5'
+
+const claude = CLAUDE_KEY ? new Anthropic({ apiKey: CLAUDE_KEY }) : null
+
+// Схема ответа для квеста. Задания названы по именам, а не сложены в
+// массив из трёх: так модель не может перепутать их порядок, а проверка
+// на стороне приложения становится формальностью.
+const QuizQuestion = z.object({
+  question: z.string(),
+  options: z.array(z.string()).length(4),
+  correct_index: z.number().int().min(0).max(3),
+})
+
+const QuestShape = z.object({
+  title: z.string(),
+  geo: z.object({
+    title: z.string(),
+    description: z.string(),
+  }),
+  photo: z.object({
+    title: z.string(),
+    description: z.string(),
+    /** Что именно должно быть в кадре — по этому же тексту снимок и проверяется. */
+    prompt: z.string(),
+  }),
+  quiz: z.object({
+    title: z.string(),
+    description: z.string(),
+    questions: z.array(QuizQuestion).length(6),
+  }),
+})
+
+const PhotoShape = z.object({
+  ok: z.boolean(),
+  reason: z.string(),
+})
 
 // Названия моделей у провайдера меняются, и промах по имени неотличим от
 // недоступности. Перебираем варианты по очереди и берём первый, который
@@ -215,6 +266,84 @@ function buildPrompt (ctx: QuestContext): string {
   и тоже про эту встречу, а не «Задание 1».`
 }
 
+/** Награды за задания одинаковы у обеих моделей — это правило Системы. */
+const REWARDS = { geolocation: 20, photo: 25, quiz: 30 }
+
+/**
+ * Квест от Claude.
+ *
+ * Ответ приходит строго по схеме (structured outputs): модель не может
+ * вернуть четыре задания, перепутать их порядок или указать номер верного
+ * ответа за пределами списка. Проверять после этого почти нечего —
+ * остаётся разложить ответ в тот вид, который ждёт приложение.
+ */
+async function questWithClaude (ctx: QuestContext) {
+  if (!claude) return null
+
+  const response = await claude.messages.parse({
+    model: CLAUDE_MODEL,
+    max_tokens: 16000,
+    system: 'Ты придумываешь квесты для приложения Questa. Отвечай по-русски.',
+    messages: [{ role: 'user', content: buildPrompt(ctx) }],
+    output_config: { format: zodOutputFormat(QuestShape) },
+  })
+
+  const quest = response.parsed_output
+  if (!quest) return null
+
+  return {
+    title: quest.title,
+    tasks: [
+      {
+        type: 'geolocation',
+        title: quest.geo.title.slice(0, 60),
+        description: quest.geo.description,
+        qp_reward: REWARDS.geolocation,
+        is_shared: false,
+        params: { radius_meters: 50 },
+      },
+      {
+        type: 'photo',
+        title: quest.photo.title.slice(0, 60),
+        description: quest.photo.description,
+        qp_reward: REWARDS.photo,
+        is_shared: false,
+        params: { prompt: quest.photo.prompt },
+      },
+      {
+        type: 'quiz',
+        title: quest.quiz.title.slice(0, 60),
+        description: quest.quiz.description,
+        qp_reward: REWARDS.quiz,
+        is_shared: true,
+        params: { questions: quest.quiz.questions },
+      },
+    ],
+  }
+}
+
+/** Взгляд Claude на снимок — тем же способом, ответ по схеме. */
+async function photoWithClaude (prompt: string, image: string) {
+  if (!claude) return null
+
+  const response = await claude.messages.parse({
+    model: CLAUDE_MODEL,
+    max_tokens: 4000,
+    messages: [{
+      role: 'user',
+      content: [
+        // Картинка идёт перед текстом: так модель сначала смотрит, а потом
+        // читает, что от неё хотят, — это рекомендация Anthropic.
+        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: image } },
+        { type: 'text', text: photoPrompt(prompt) },
+      ],
+    }],
+    output_config: { format: zodOutputFormat(PhotoShape) },
+  })
+
+  return response.parsed_output ?? null
+}
+
 /** Проверяет ответ модели. Возвращает квест или null, если ответ не годится. */
 function validateQuest (raw: unknown) {
   if (typeof raw !== 'object' || raw === null) return null
@@ -334,7 +463,7 @@ Deno.serve(async (request) => {
     })
 
   const apiKey = Deno.env.get('GEMINI_API_KEY')
-  if (!apiKey) return json({ error: 'Ключ модели не настроен' }, 503)
+  if (!apiKey && !claude) return json({ error: 'Ключ модели не настроен' }, 503)
 
   let payload: QuestContext | PhotoRequest
   try {
@@ -348,6 +477,19 @@ Deno.serve(async (request) => {
     if (!request.prompt || !request.image) {
       return json({ error: 'Не хватает снимка или задания' }, 400)
     }
+
+    // Сначала Claude: он и смотрит внимательнее, и отвечает по схеме.
+    if (claude) {
+      try {
+        const verdict = await photoWithClaude(request.prompt, request.image)
+        if (verdict) return json({ ...verdict, model: CLAUDE_MODEL })
+      } catch (cause) {
+        // Отказ Claude — не конец: ниже пробуем запасную модель.
+        console.error('claude photo failed', cause)
+      }
+    }
+
+    if (!apiKey) return json({ error: 'Проверка недоступна' }, 502)
     return await checkPhoto(request, apiKey, json)
   }
 
@@ -355,6 +497,26 @@ Deno.serve(async (request) => {
 
   if (!ctx?.title || !ctx?.category || !ctx?.address) {
     return json({ error: 'Не хватает контекста ивента' }, 400)
+  }
+
+  // Причина отказа возвращается вызывающему, а не только пишется в журнал:
+  // журнал функции виден лишь в панели Supabase, а разбираться приходится по
+  // тому, что видно в приложении.
+  const failures: string[] = []
+
+  // Основная модель. Её отказ не роняет запрос: ниже остаётся Gemini.
+  if (claude) {
+    try {
+      const quest = await questWithClaude(ctx)
+      if (quest) return json({ ...quest, model: CLAUDE_MODEL })
+    } catch (cause) {
+      console.error('claude quest failed', cause)
+      failures.push(`${CLAUDE_MODEL}: ${cause instanceof Error ? cause.message : cause}`)
+    }
+  }
+
+  if (!apiKey) {
+    return json({ error: 'Модель не ответила', details: failures }, 502)
   }
 
   const body = JSON.stringify({
@@ -366,10 +528,6 @@ Deno.serve(async (request) => {
     },
   })
 
-  // Причина отказа возвращается вызывающему, а не только пишется в журнал:
-  // журнал функции виден лишь в панели Supabase, а разбираться приходится по
-  // тому, что видно в приложении.
-  const failures: string[] = []
   let overloaded = false
 
   const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))

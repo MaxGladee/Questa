@@ -124,17 +124,35 @@ export default function Quest () {
       <div className="space-y-6 px-4 pb-10 pt-2">
         <button
           onClick={markPresence} disabled={busy || checkedIn}
-          className="flex w-full items-center gap-3 rounded-card bg-surface-3 p-4 text-left"
+          /*
+            До отметки это действие, а не подпись: яркая кнопка, которая
+            откликается на нажатие. После — спокойная плашка с галочкой:
+            нажимать больше нечего, и выглядеть она должна иначе.
+          */
+          className={`flex w-full items-center gap-3 rounded-card p-4 text-left transition ${
+            checkedIn
+              ? 'bg-surface-2'
+              : 'bg-accent shadow-lg shadow-accent/25 active:scale-[0.99]'}`}
         >
-          <PinIcon className={`size-9 ${checkedIn ? 'text-success' : 'text-muted'}`} />
-          <div>
-            <p className="text-[19px] font-semibold text-muted">
-              {checkedIn ? 'Присутствие отмечено!' : 'Отметить присутствие'}
-            </p>
-            <p className="text-[17px] text-muted">
-              <span className="font-bold text-success">+50 XP</span> за check-in
-            </p>
-          </div>
+          <span
+            className={`grid size-11 shrink-0 place-items-center rounded-full ${
+              checkedIn ? 'bg-success/15' : 'bg-white/20'}`}
+          >
+            {checkedIn
+              ? <span className="text-[20px] font-bold text-success">✓</span>
+              : <PinIcon className="size-6 text-white" />}
+          </span>
+
+          <span className="min-w-0 flex-1">
+            <span className={`block text-[18px] font-bold ${checkedIn ? 'text-muted' : ''}`}>
+              {checkedIn ? 'Вы на месте' : busy ? 'Отмечаем…' : 'Я на месте'}
+            </span>
+            <span className={`block text-[15px] ${checkedIn ? 'text-muted' : 'text-white/85'}`}>
+              {checkedIn ? 'Отмечено · +50 XP' : 'Нажмите здесь · +50 XP'}
+            </span>
+          </span>
+
+          {!checkedIn && <ChevronIcon className="size-5 shrink-0 text-white/70" />}
         </button>
 
         <div className="flex items-end justify-between rounded-card bg-surface-2 p-5">
