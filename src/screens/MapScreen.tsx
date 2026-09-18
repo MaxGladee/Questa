@@ -12,7 +12,7 @@ import {
 import { renderToStaticMarkup } from 'react-dom/server'
 import { Avatar } from '../components/ui'
 import { LocateIcon, PinIcon } from '../components/icons'
-import { distanceMeters, formatDistance } from '../lib/geo'
+import { GEO_QUICK, distanceMeters, formatDistance, geoErrorMessage } from '../lib/geo'
 import { listEvents } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
@@ -35,7 +35,6 @@ export default function MapScreen () {
   const [selected, setSelected] = useState<string | null>(null)
   const [categories, setCategories] = useState<CategoryCode[]>([])
   const [me, setMe] = useState<[number, number] | null>(null)
-  const [geoDenied, setGeoDenied] = useState(false)
   // К своей точке карту подводим один раз — дальше её двигает человек.
   const centeredOnMe = useRef(false)
   const toast = useToast()
@@ -57,7 +56,6 @@ export default function MapScreen () {
 
     const watch = navigator.geolocation.watchPosition(
       ({ coords }) => {
-        setGeoDenied(false)
         setMe([coords.latitude, coords.longitude])
 
         // Первый отклик приводит карту к себе: иначе метка «я» остаётся
@@ -67,8 +65,8 @@ export default function MapScreen () {
           map.current?.setView([coords.latitude, coords.longitude], 14)
         }
       },
-      () => setGeoDenied(true),
-      { enableHighAccuracy: true, maximumAge: 30_000, timeout: 20_000 },
+      () => {},
+      GEO_QUICK,
     )
 
     return () => navigator.geolocation.clearWatch(watch)
@@ -146,18 +144,17 @@ export default function MapScreen () {
       return
     }
 
-    toast(geoDenied
-      ? 'Доступ к геопозиции закрыт — включите его в настройках сайта'
-      : 'Определяем, где вы…')
+    // Запрос идёт по нажатию, а не сам по себе: Safari на iPhone
+    // показывает окно с вопросом только в ответ на действие человека.
+    toast('Определяем, где вы…')
 
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
-        setGeoDenied(false)
         setMe([coords.latitude, coords.longitude])
         map.current?.flyTo([coords.latitude, coords.longitude], 15)
       },
-      () => { setGeoDenied(true); toast('Не удалось определить геопозицию') },
-      { enableHighAccuracy: true, timeout: 15_000 },
+      (problem) => toast(geoErrorMessage(problem)),
+      GEO_QUICK,
     )
   }
 

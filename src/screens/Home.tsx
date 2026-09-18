@@ -8,7 +8,7 @@ import { BellIcon, ChevronIcon, MicIcon, PinIcon, SearchIcon } from '../componen
 import { Cover } from '../components/Art'
 import { ideasForNow } from '../data/ideas'
 import { categoryTitle, formatTime, type QuestaEvent } from '../data/demo'
-import { formatDistance } from '../lib/geo'
+import { GEO_QUICK, formatDistance } from '../lib/geo'
 import { useAuth } from '../lib/auth'
 import { countUnread, getQuest, listEvents } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
@@ -120,7 +120,7 @@ export default function Home () {
       navigator.geolocation.getCurrentPosition(
         ({ coords }) => setNear([coords.latitude, coords.longitude]),
         () => {},
-        { maximumAge: 300_000, timeout: 10_000 },
+        GEO_QUICK,
       )
     }).catch(() => {})
   }, [])

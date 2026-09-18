@@ -95,8 +95,6 @@ export interface NewEvent {
   category: CategoryCode
   chatMode: 'auto' | 'manual'
   coverUrl?: string
-  /** Интересы организатора — часть контекста, который уходит в модель. */
-  interests?: string[]
 }
 
 /** Задание в том виде, в каком его возвращает функция генерации. */
@@ -176,40 +174,97 @@ export async function createEvent (input: NewEvent, organizerId: string): Promis
   await client.from('event_participant')
     .insert({ event_id: event.id, user_id: organizerId, role: 'organizer' })
 
-  // Квест сперва пробуем сгенерировать по контексту встречи (ТЗ 4.2.6);
-  // если модель недоступна или её ответ не прошёл проверку — берём шаблон.
-  const generated = await generateQuest(input)
-  if (generated) {
-    await saveQuest(event.id, 'ai', null, generated)
-  } else {
-    await buildQuestFromTemplate(event.id, category!.id)
-  }
-
+  // Квест здесь не создаётся. Он придумывается в момент, когда организатор
+  // начинает встречу: только тогда известно, кто собрался, и задания можно
+  // подобрать под эту компанию, а не под пустой список участников. Заодно
+  // создание ивента не ждёт ответа модели и проходит мгновенно.
   return event.id
+}
+
+/** Всё, что модель знает о встрече, когда придумывает задания. */
+export interface QuestContext {
+  title: string
+  description: string
+  category: CategoryCode
+  address: string
+  city: string
+  /** Во сколько встреча начинается — «вечером в пятницу» и «в среду утром» разные. */
+  startsAt: string
+  participants: number
+  /** Интересы собравшихся, от самых частых в компании к редким. */
+  interests: string[]
 }
 
 /**
  * Обращение к функции генерации на стороне Supabase. Ключ модели лежит там,
- * в приложение он не попадает. Ошибка здесь не срывает создание ивента —
+ * в приложение он не попадает. Ошибка здесь не срывает начало встречи —
  * возвращаем null, и вызывающий код берёт шаблон.
  */
-async function generateQuest (input: NewEvent): Promise<GeneratedTask[] | null> {
+async function generateQuest (context: QuestContext): Promise<GeneratedTask[] | null> {
   try {
     const { data, error } = await db().functions.invoke('generate-quest', {
-      body: {
-        title: input.title,
-        description: input.description,
-        category: input.category,
-        address: input.address,
-        participants: input.maxParticipants,
-        interests: input.interests ?? [],
-      },
+      body: context,
     })
 
     if (error || !Array.isArray(data?.tasks) || data.tasks.length !== 3) return null
     return data.tasks as GeneratedTask[]
   } catch {
     return null
+  }
+}
+
+/**
+ * Контекст встречи для модели: сам ивент и интересы собравшихся.
+ *
+ * Интересы берутся не у организатора, а у всей компании, и сортируются по
+ * частоте: то, что назвали трое, важнее того, что назвал один. Так квест
+ * получается про эту группу, а не про того, кто первым нажал кнопку.
+ */
+async function questContext (eventId: string): Promise<QuestContext | null> {
+  const client = db()
+
+  const { data: event } = await client
+    .from('event')
+    .select('title, description, address, starts_at, category:interest (code)')
+    .eq('id', eventId).maybeSingle()
+
+  if (!event) return null
+
+  const { data: members } = await client
+    .from('event_participant')
+    .select('user_id, app_user (city)')
+    .eq('event_id', eventId)
+
+  const ids = (members ?? []).map((row: Row) => row.user_id)
+
+  const { data: chosen } = await client
+    .from('user_interest').select('interest (code)').in('user_id', ids)
+
+  const counts = new Map<string, number>()
+  for (const row of (chosen ?? []) as Row[]) {
+    const related = row.interest
+    const list = Array.isArray(related) ? related : [related]
+    for (const item of list) {
+      const code = (item as Row | null)?.code
+      if (code) counts.set(code, (counts.get(code) ?? 0) + 1)
+    }
+  }
+
+  const interests = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([code]) => code)
+
+  const category = (Array.isArray(event.category) ? event.category[0] : event.category) as Row | null
+
+  return {
+    title: event.title,
+    description: event.description ?? '',
+    category: (category?.code ?? 'other') as CategoryCode,
+    address: event.address,
+    city: ((members ?? [])[0] as Row | undefined)?.app_user?.city ?? DEFAULT_CITY.name,
+    startsAt: event.starts_at,
+    participants: ids.length,
+    interests,
   }
 }
 
@@ -366,9 +421,24 @@ export async function cancelEvent (
  * Решение за организатором, а не по часам: люди опаздывают, и начинать
  * встречу по таймеру, когда половина ещё в пути, неправильно.
  */
+/**
+ * Начало встречи организатором (ЧТЗ 5.7).
+ *
+ * Здесь же придумывается квест — и это главное отличие от прежнего
+ * порядка. При создании ивента участников ещё нет, и задания приходилось
+ * сочинять по одному организатору; теперь компания собралась, её интересы
+ * известны, и модель получает настоящий контекст. Заодно создание ивента
+ * перестало ждать ответа модели.
+ *
+ * Порядок шагов важен: сперва задания, потом статус. Смена статуса
+ * объявляется в чате триггером, и к этому моменту задания должны быть на
+ * месте — иначе люди откроют пустой квест.
+ */
 export async function startEvent (eventId: string, organizerId: string): Promise<void> {
   if (!isLive) return
   const client = db()
+
+  await prepareQuest(eventId)
 
   const { error } = await client.from('event')
     .update({ status: 'in_progress' })
@@ -380,6 +450,36 @@ export async function startEvent (eventId: string, organizerId: string): Promise
 
   // Сообщение «Ивент начался» и уведомления участникам ставит триггер:
   // системные сообщения приложению писать нечем — у них нет автора.
+}
+
+/**
+ * Подбор заданий к началу встречи.
+ *
+ * Старый квест заменяется только на удавшийся новый: если модель не
+ * ответила, лучше оставить то, что есть, чем начать встречу без заданий.
+ * Совсем пустому ивенту в этом случае достаётся шаблон из коллекции.
+ */
+async function prepareQuest (eventId: string): Promise<void> {
+  const client = db()
+
+  const { data: existing } = await client
+    .from('quest').select('id').eq('event_id', eventId).maybeSingle()
+
+  const context = await questContext(eventId)
+  const generated = context ? await generateQuest(context) : null
+
+  if (generated) {
+    if (existing) await client.from('quest').delete().eq('id', existing.id)
+    await saveQuest(eventId, 'ai', null, generated)
+    return
+  }
+
+  if (existing) return
+
+  const { data: category } = await client
+    .from('event').select('category_id').eq('id', eventId).maybeSingle()
+
+  if (category) await buildQuestFromTemplate(eventId, category.category_id)
 }
 
 /**

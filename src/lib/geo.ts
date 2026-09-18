@@ -26,3 +26,39 @@ export function formatDuration (seconds: number): string {
   const minutes = Math.floor(seconds / 60)
   return `${minutes}:${String(Math.max(0, seconds) % 60).padStart(2, '0')}`
 }
+
+/**
+ * Человеческое объяснение отказа геолокации.
+ *
+ * Браузер различает три причины, а приложение раньше валило их в одну и
+ * говорило «разрешите доступ» даже когда доступ был разрешён — так было в
+ * Safari на iPhone, где запрос чаще всего просто не успевает ответить в
+ * помещении. Совет в таком случае нужен совсем другой.
+ */
+export function geoErrorMessage (error: GeolocationPositionError): string {
+  if (error.code === error.PERMISSION_DENIED) {
+    return 'Доступ к геопозиции закрыт. Разрешите его для этого сайта: '
+      + 'в Safari — «аА» в адресной строке → Настройки для этого веб-сайта → Геопозиция'
+  }
+
+  if (error.code === error.TIMEOUT) {
+    return 'Определение затянулось. Нажмите ещё раз — в помещении это занимает дольше'
+  }
+
+  return 'Не удалось определить, где вы. Помогает выйти к окну или включить Wi-Fi'
+}
+
+/**
+ * Настройки запроса положения.
+ *
+ * Высокая точность включается не сразу: первый ответ по вышкам и Wi-Fi
+ * приходит за секунды, а спутниковый в помещении может не прийти вовсе —
+ * и человек видит ошибку вместо своей точки.
+ */
+export const GEO_QUICK: PositionOptions = {
+  enableHighAccuracy: false, timeout: 20_000, maximumAge: 60_000,
+}
+
+export const GEO_PRECISE: PositionOptions = {
+  enableHighAccuracy: true, timeout: 25_000, maximumAge: 5_000,
+}

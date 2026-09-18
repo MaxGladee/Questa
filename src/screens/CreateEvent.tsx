@@ -95,7 +95,6 @@ export default function CreateEvent () {
         maxParticipants: to,
         category,
         chatMode,
-        interests: profile!.interests,
       }, profile!.id)
       setCreated(id)
     } catch (cause) {

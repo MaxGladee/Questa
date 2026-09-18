@@ -4,7 +4,7 @@ import 'leaflet/dist/leaflet.css'
 import { addMapTiles } from '../lib/map'
 import { Button } from '../components/ui'
 import { CloseIcon, GeoTaskIcon } from '../components/icons'
-import { distanceMeters, formatDistance, formatDuration } from '../lib/geo'
+import { GEO_PRECISE, distanceMeters, formatDistance, formatDuration, geoErrorMessage } from '../lib/geo'
 import type { QuestTask } from '../data/demo'
 
 /**
@@ -72,12 +72,8 @@ export default function GeoTask (
         setError(null)
         setPosition([coords.latitude, coords.longitude])
       },
-      (cause) => {
-        setError(cause.code === cause.PERMISSION_DENIED
-          ? 'Нет доступа к геолокации. Разрешите его в настройках браузера и вернитесь сюда.'
-          : 'Не удаётся определить, где вы находитесь. Проверьте, включена ли геолокация.')
-      },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 20_000 },
+      (cause) => setError(geoErrorMessage(cause)),
+      GEO_PRECISE,
     )
 
     return () => navigator.geolocation.clearWatch(watch)

@@ -196,11 +196,13 @@ export default function EventDetails () {
 
             {/* Пока организатор не начал встречу, заданий нет ни у кого. */}
             {event.myRole === 'organizer' && event.status === 'active' && (
-              <Button onClick={() => act(
+              <Button disabled={busy} onClick={() => act(
                 () => startEvent(event.id, profile!.id),
                 () => { toast('Ивент начался — задания открыты'); reload() },
               )}>
-                Начать ивент
+                {/* Ожидание честное: в этот момент модель придумывает
+                    задания под собравшуюся компанию, это занимает секунды. */}
+                {busy ? 'Придумываем задания…' : 'Начать ивент'}
               </Button>
             )}
 

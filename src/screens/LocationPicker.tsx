@@ -7,7 +7,7 @@ import { CloseIcon, PinIcon, SearchIcon } from '../components/icons'
 import { venuesFor, type Venue } from '../data/venues'
 import { cityCenter } from '../data/cities'
 import { reverseGeocode, searchPlaces } from '../lib/api'
-import { distanceMeters, formatDistance } from '../lib/geo'
+import { GEO_QUICK, distanceMeters, formatDistance } from '../lib/geo'
 import { useAuth } from '../lib/auth'
 
 /**
@@ -76,7 +76,7 @@ export default function LocationPicker (
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => setMe([coords.latitude, coords.longitude]),
       () => {},
-      { enableHighAccuracy: true, timeout: 15_000 },
+      GEO_QUICK,
     )
   }, [])
 

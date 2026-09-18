@@ -242,7 +242,11 @@ export default function Chat () {
 
           // Объявление о квесте — такое же системное сообщение, как остальные,
           // но показывается карточкой со списком заданий.
-          if (message.authorId === null && message.body === QUEST_READY && quest?.quest) {
+          // Карточка с заданиями показывается, только когда встреча идёт:
+          // до этого открыть задания всё равно нельзя, и большая плашка в
+          // переписке за два дня до встречи только сбивала с толку.
+          if (message.authorId === null && message.body === QUEST_READY
+              && quest?.quest && event?.status === 'in_progress') {
             return (
               <div key={message.id} className="animate-message space-y-2 pt-3">
                 <p className="text-center text-[16px] font-semibold">
