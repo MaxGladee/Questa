@@ -3,7 +3,9 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { Button, Field, TextArea } from '../components/ui'
 import { CalendarIcon, CameraIcon, ClockIcon, CloseIcon, PinIcon } from '../components/icons'
 import LocationPicker from './LocationPicker'
-import { CATEGORIES, formatWhen, type CategoryCode } from '../data/demo'
+import { PickerField, Sheet } from '../components/Sheet'
+import { CATEGORIES, categoryTitle, formatWhen, type CategoryCode } from '../data/demo'
+import { categoryArt } from '../data/category-art'
 import type { IdeaSuggestion } from '../data/ideas'
 import {
   WEEKLY_EVENT_LIMIT, WEEKLY_LIMIT_ENABLED, createEvent, eventsLeftThisWeek, uploadImage,
@@ -32,6 +34,7 @@ export default function CreateEvent () {
     idea?.place ?? state?.place ?? null,
   )
   const [pickingPlace, setPickingPlace] = useState(false)
+  const [pickingCategory, setPickingCategory] = useState(false)
   const { data: left } = useAsync(
     () => profile ? eventsLeftThisWeek(profile.id) : Promise.resolve(WEEKLY_EVENT_LIMIT),
     [profile?.id],
@@ -266,20 +269,16 @@ export default function CreateEvent () {
           </div>
         </div>
 
-        <div className="space-y-3">
-          <span className="text-[17px]">Категория ивента</span>
-          <div className="flex flex-wrap gap-2.5">
-            {CATEGORIES.map(({ code, title: label }) => (
-              <button
-                key={code} onClick={() => setCategory(code)}
-                className={`rounded-2xl px-5 py-3 text-[17px] transition ${
-                  category === code ? 'bg-accent' : 'border border-white/15'}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
+        {/* Категорий шестнадцать, и плитками они занимали пол-формы: между
+            временем и чатом вырастала стена кнопок, через которую нужно было
+            прокручивать. Здесь — одна строка, как у города в профиле, а
+            выбор открывается списком поверх экрана. */}
+        <PickerField
+          label="Категория ивента"
+          value={`${categoryArt(category).emoji}  ${categoryTitle(category)}`}
+          placeholder="Выберите категорию"
+          onOpen={() => setPickingCategory(true)}
+        />
 
         {/* Режим создания чата — ЧТЗ 5.5, «О режиме создания чата». */}
         <div className="space-y-3">
@@ -311,6 +310,23 @@ export default function CreateEvent () {
           {busy ? 'Создаём…' : 'Создать ивент'}
         </Button>
       </div>
+
+      {pickingCategory && (
+        <Sheet
+          title="Категория ивента"
+          options={CATEGORIES.map(({ code, title }) => ({
+            value: code,
+            title: `${categoryArt(code).emoji}  ${title}`,
+          }))}
+          selected={[category]}
+          searchable={false}
+          onClose={() => setPickingCategory(false)}
+          onApply={(values) => {
+            setCategory(values[0] as CategoryCode)
+            setPickingCategory(false)
+          }}
+        />
+      )}
 
       {pickingPlace && (
         <LocationPicker
