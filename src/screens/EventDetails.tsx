@@ -11,6 +11,7 @@ import {
   openChat, startEvent,
 } from '../lib/api'
 import { ReportSheet } from '../components/ReportSheet'
+import { Lightbox } from '../components/Lightbox'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
 import { useToast } from '../components/Toast'
@@ -37,6 +38,7 @@ export default function EventDetails () {
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [reporting, setReporting] = useState(false)
+  const [zoomed, setZoomed] = useState<string | null>(null)
 
   const { data: event, error, loading, reload } = useAsync(
     () => getEvent(id!, profile?.id ?? null), [id, profile?.id],
@@ -106,8 +108,17 @@ export default function EventDetails () {
    */
   const share = async () => {
     const link = `${window.location.origin}${import.meta.env.BASE_URL}#/event/${event.id}`
-    const text = `${event.title} — ${formatDate(event.startsAt)}, `
-      + `${formatTime(event.startsAt)}, ${event.address}`
+
+    // К ссылке идёт короткий рассказ о встрече и о самом приложении: в
+    // мессенджере видна одна строка, и «зайди сюда» без объяснения
+    // выглядит как спам, а не как приглашение.
+    const text = [
+      `${event.title} — ${formatDate(event.startsAt)}, ${formatTime(event.startsAt)}`,
+      event.address,
+      '',
+      'Собираемся через Questa: приложение для небольших встреч, где каждая',
+      'превращается в квест с заданиями и очками. Присоединяйся 👇',
+    ].join('\n')
 
     try {
       if (navigator.share) {
@@ -115,8 +126,9 @@ export default function EventDetails () {
         return
       }
 
-      await navigator.clipboard.writeText(link)
-      toast('Ссылка скопирована')
+      // Без системного окна копируем приглашение целиком, а не голую ссылку.
+      await navigator.clipboard.writeText(`${text}\n${link}`)
+      toast('Приглашение скопировано')
     } catch {
       // Отказ в системном окне — не ошибка, человек просто передумал.
     }
@@ -149,12 +161,20 @@ export default function EventDetails () {
     >
       <div className="space-y-4 px-4 pb-8">
         <div className="relative">
-          <Cover
-            src={event.coverUrl} category={event.category}
-            className="h-56 w-full rounded-[24px]" emojiClassName="text-7xl"
-          />
+          {/* Обложка обрезана по высоте карточки — по нажатию показываем её
+              целиком: на ней бывает важное, вроде афиши или вида места. */}
+          <button
+            onClick={() => event.coverUrl && setZoomed(event.coverUrl)}
+            className="block w-full" aria-label="Открыть обложку"
+          >
+            <Cover
+              src={event.coverUrl} category={event.category}
+              className="h-56 w-full rounded-[24px]" emojiClassName="text-7xl"
+            />
+          </button>
           {event.myRole !== 'guest' && (
-            <span className="absolute right-3 top-3 rounded-full bg-green-800/90 px-5 py-2.5
+            <span className="pointer-events-none absolute right-3 top-3 rounded-full
+                             bg-green-800/90 px-5 py-2.5
                              text-[16px] font-semibold">
               {event.myRole === 'organizer' ? 'Ты организатор' : 'Ты участвуешь'}
             </span>
@@ -359,6 +379,8 @@ export default function EventDetails () {
           }}
         />
       )}
+
+      {zoomed && <Lightbox src={zoomed} alt="Обложка ивента" onClose={() => setZoomed(null)} />}
 
       {/* Отмена с причиной: участникам важно узнать, почему встречи не будет. */}
       {cancelling && (

@@ -9,6 +9,7 @@ import {
   sendMessage, subscribeMessages, uploadImage,
 } from '../lib/api'
 import { ReportSheet } from '../components/ReportSheet'
+import { Lightbox } from '../components/Lightbox'
 import { shrinkImage } from '../lib/image'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
@@ -78,6 +79,7 @@ export default function Chat () {
   const [sending, setSending] = useState(false)
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [zoomed, setZoomed] = useState<string | null>(null)
   const bottom = useRef<HTMLDivElement>(null)
   const filePicker = useRef<HTMLInputElement>(null)
   const toast = useToast()
@@ -432,6 +434,8 @@ export default function Chat () {
       )}
 
       {reportSheet}
+
+      {zoomed && <Lightbox src={zoomed} onClose={() => setZoomed(null)} />}
     </div>
   )
 }

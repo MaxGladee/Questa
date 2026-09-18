@@ -22,9 +22,20 @@ export function ToastProvider ({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
   const nextId = useRef(0)
 
+  /**
+   * Показ подсказки.
+   *
+   * Повторное сообщение заменяет предыдущее с тем же текстом, а не встаёт
+   * под ним: иначе десять нажатий на знак вопроса заполняли подсказками
+   * весь экран. Больше трёх штук одновременно тоже не показывается —
+   * лишние вытесняют самые старые.
+   */
   const show = useCallback((text: string, tone: Toast['tone'] = 'ok') => {
     const id = nextId.current++
-    setToasts((list) => [...list, { id, text, tone }])
+
+    setToasts((list) => [...list.filter((item) => item.text !== text), { id, text, tone }]
+      .slice(-3))
+
     setTimeout(() => setToasts((list) => list.filter((item) => item.id !== id)), 3200)
   }, [])
 

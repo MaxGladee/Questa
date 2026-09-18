@@ -4,7 +4,9 @@ import { TabScreen } from '../components/Layout'
 import { EventListCard } from '../components/EventCard'
 import { Avatar, Progress, useAutofillGuard } from '../components/ui'
 import { Empty, Failed, Loading } from '../components/States'
-import { BellIcon, ChevronIcon, MicIcon, PinIcon, SearchIcon } from '../components/icons'
+import {
+  BellIcon, CalendarIcon, ChevronIcon, MicIcon, PinIcon, SearchIcon,
+} from '../components/icons'
 import { Cover } from '../components/Art'
 import { ideasForNow } from '../data/ideas'
 import { categoryTitle, formatTime, type QuestaEvent } from '../data/demo'
@@ -20,53 +22,89 @@ import { useAsync } from '../lib/useAsync'
  * так свои планы видно сразу, не переключая дни по одному.
  */
 function DateStrip (
-  { value, onChange, planned }: {
+  { value, onChange, planned, nearby, onCollapse }: {
     value: number
     onChange: (day: number) => void
     /** Свои ивенты по дням — ключ вида Date.toDateString(). */
     planned: Record<string, QuestaEvent[]>
+    /** Чужие ивенты по тем же дням: по ним видно, где вообще что-то есть. */
+    nearby: Record<string, QuestaEvent[]>
+    onCollapse: () => void
   },
 ) {
   const today = new Date()
-  const days = Array.from({ length: 5 }, (_, offset) => {
+  const days = Array.from({ length: 7 }, (_, offset) => {
     const date = new Date(today)
     date.setDate(today.getDate() + offset)
     return date
   })
 
   return (
-    <div className="no-scrollbar -mx-5 flex gap-3 overflow-x-auto px-5">
+    <div className="no-scrollbar -mx-5 flex items-stretch gap-2.5 overflow-x-auto px-5">
       {days.map((date, index) => {
         const active = index === value
-        const mine = planned[date.toDateString()] ?? []
+        const key = date.toDateString()
+        const mine = planned[key] ?? []
+        const others = nearby[key] ?? []
+
+        // Точки над числом — как в макете: свои встречи выделены цветом,
+        // чужие приглушены. Больше трёх не рисуем, дальше теряется смысл.
+        const dots = [
+          ...mine.slice(0, 3).map(() => 'mine' as const),
+          ...others.slice(0, 3 - Math.min(mine.length, 3)).map(() => 'other' as const),
+        ]
 
         return (
           <button
             key={index} onClick={() => onChange(index)}
-            className={`flex w-[74px] shrink-0 flex-col items-center gap-1 rounded-[20px] py-3
-                        transition ${active ? 'bg-white text-bg' : 'bg-surface text-white'} ${
-                          mine.length > 0 && !active ? 'ring-1 ring-accent/60' : ''}`}
+            className={`flex w-[68px] shrink-0 flex-col items-center gap-1 rounded-[22px] py-3
+                        transition ${active ? 'bg-white text-bg' : 'bg-surface text-white'}`}
           >
-            <span className="text-[26px] font-bold leading-none">{date.getDate()}</span>
-            <span className={`text-[13px] ${active ? 'text-bg/60' : 'text-muted'}`}>
-              {date.toLocaleDateString('ru-RU', { weekday: 'short' })}
-            </span>
-
-            {/* Место под метки занято всегда, иначе дни разной высоты. */}
-            <span className="flex h-5 items-center">
-              {mine.slice(0, 3).map((event, position) => (
-                <Cover
-                  key={event.id} src={event.coverUrl} category={event.category}
-                  className={`size-5 rounded-full ${position > 0 ? '-ml-1.5' : ''} ${
-                    active ? 'ring-1 ring-bg/20' : 'ring-1 ring-surface'}`}
-                  emojiClassName="text-[10px]"
+            {/* Место под точки занято всегда, иначе дни разной высоты. */}
+            <span className="flex h-2 items-center gap-1">
+              {dots.map((kind, position) => (
+                <span
+                  key={position}
+                  className={`size-1.5 rounded-full ${
+                    kind === 'mine'
+                      ? active ? 'bg-accent' : 'bg-accent'
+                      : active ? 'bg-bg/25' : 'bg-white/30'}`}
                 />
               ))}
+            </span>
+
+            <span className="text-[24px] font-bold leading-none">{date.getDate()}</span>
+            <span className={`text-[13px] ${active ? 'text-bg/60' : 'text-muted'}`}>
+              {date.toLocaleDateString('ru-RU', { weekday: 'short' })}
             </span>
           </button>
         )
       })}
+
+      {/* Календарь сворачивается в отметку рядом с «Рекомендациями»: на
+          экране он занимает полосу, а нужен не всегда. */}
+      <button
+        onClick={onCollapse} aria-label="Свернуть календарь"
+        className="flex w-[44px] shrink-0 items-center justify-center rounded-[22px]
+                   bg-surface text-muted"
+      >
+        <ChevronIcon className="size-5 -rotate-90" />
+      </button>
     </div>
+  )
+}
+
+/** Свёрнутый календарь — отметка с выбранным днём. */
+function DateChip ({ day, onOpen }: { day: Date; onOpen: () => void }) {
+  return (
+    <button
+      onClick={onOpen}
+      className="flex shrink-0 items-center gap-2 rounded-full bg-surface px-3.5 py-2
+                 text-[14px] font-semibold"
+    >
+      <CalendarIcon className="size-4 text-muted" />
+      {day.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+    </button>
   )
 }
 
@@ -75,6 +113,7 @@ export default function Home () {
   const [day, setDay] = useState(0)
   const [query, setQuery] = useState('')
   const [near, setNear] = useState<[number, number] | null>(null)
+  const [calendarOpen, setCalendarOpen] = useState(true)
   const guard = useAutofillGuard()
 
   const { data: events, error, loading, reload } = useAsync(
@@ -137,6 +176,14 @@ export default function Home () {
 
   const plans = planned[chosenDay.toDateString()] ?? []
 
+  // Чужие встречи по дням: по ним в календаре видно, где вообще что-то есть.
+  const nearby: Record<string, QuestaEvent[]> = {}
+  for (const event of events ?? []) {
+    if (event.myRole !== 'guest' || event.status !== 'active') continue
+    const key = new Date(event.startsAt).toDateString()
+    ;(nearby[key] ??= []).push(event)
+  }
+
   const recommended = (events ?? []).filter((event) => {
     if (event.status !== 'active' || event.myRole !== 'guest') return false
     if (!event.title.toLowerCase().includes(query.trim().toLowerCase())) return false
@@ -147,7 +194,12 @@ export default function Home () {
     <TabScreen>
       <div className="space-y-4 px-5 pt-3">
         <header className="flex items-center gap-3">
-          <Link to="/profile">
+          {/* Аватар — такая же квадратная кнопка, как колокольчик справа:
+              в макете шапка собрана из трёх одинаковых по высоте блоков. */}
+          <Link
+            to="/profile" aria-label="Профиль"
+            className="shrink-0 overflow-hidden rounded-2xl bg-surface"
+          >
             <Avatar
               name={profile?.nickname ?? '?'} src={profile?.avatarUrl}
               size={48} className="rounded-2xl"
@@ -207,7 +259,12 @@ export default function Home () {
           </Link>
         )}
 
-        <DateStrip value={day} onChange={setDay} planned={planned} />
+        {calendarOpen && (
+          <DateStrip
+            value={day} onChange={setDay} planned={planned} nearby={nearby}
+            onCollapse={() => setCalendarOpen(false)}
+          />
+        )}
 
         {plans.length > 0 && (
           <section className="space-y-3">
@@ -238,7 +295,12 @@ export default function Home () {
         )}
 
         <section className="space-y-3">
-          <h2 className="text-[24px]">Рекомендации</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-[24px]">Рекомендации</h2>
+            {!calendarOpen && (
+              <DateChip day={chosenDay} onOpen={() => setCalendarOpen(true)} />
+            )}
+          </div>
 
           {loading && <Loading />}
           {error && <Failed message={error} onRetry={reload} />}

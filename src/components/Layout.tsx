@@ -57,7 +57,7 @@ export function PhoneFrame ({ children }: { children: ReactNode }) {
   // весь экран, и без них содержимое уезжает под системные элементы.
   return (
     <div
-      className="mx-auto flex h-full w-full max-w-[420px] flex-col bg-bg
+      className="relative mx-auto flex h-full w-full max-w-[420px] flex-col bg-bg
                  shadow-[0_0_80px_-20px_rgb(135_105_255/0.35)]"
       style={{
         paddingTop: 'env(safe-area-inset-top)',
@@ -65,6 +65,21 @@ export function PhoneFrame ({ children }: { children: ReactNode }) {
       }}
     >
       <OfflineBar />
+
+      {/*
+        Мягкое свечение вверху экрана — как в макетах: фон не плоский, а
+        уходит от фиолетового к тёмному. Слой не ловит нажатия и лежит под
+        содержимым, поэтому ни на что не влияет.
+      */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 z-0 h-56"
+        style={{
+          background:
+            'linear-gradient(180deg, rgb(135 105 255 / .20), transparent 85%)',
+        }}
+      />
+
       {children}
     </div>
   )
