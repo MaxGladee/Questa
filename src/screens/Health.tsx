@@ -159,6 +159,7 @@ export default function Health () {
       { key: '009_more_categories', title: '009 — новые категории встреч' },
       { key: '010_event_edits', title: '010 — правки ивента и напоминания' },
       { key: '011_quiz_and_edit_limits', title: '011 — ответы квиза и лимит правок' },
+      { key: '012_rate_reminder', title: '012 — напоминание оценить встречу' },
     ]
 
     try {

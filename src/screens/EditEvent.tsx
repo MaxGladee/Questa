@@ -46,8 +46,26 @@ export default function EditEvent () {
     return <Failed message="Начатую или завершённую встречу менять поздно" />
   }
 
-  return <Form event={event} onDone={() => navigate(`/event/${event.id}`, { replace: true })}
-    onCancel={() => navigate(-1)} organizerId={profile!.id} toast={toast} />
+  /**
+   * Уйти с формы — значит вернуться туда, откуда пришли.
+   *
+   * Раньше после сохранения экран заменялся карточкой ивента, и в истории
+   * оказывались две карточки подряд: первая — та, с которой открыли
+   * форму, вторая — подменившая форму. «Назад» вело с карточки на
+   * карточку, и только со второго нажатия человек выбирался дальше.
+   *
+   * Теперь просто шаг назад по истории. Если формy открыли по прямой
+   * ссылке и шага назад нет, открывается карточка — уходить из
+   * приложения не нужно.
+   */
+  const leave = () => {
+    const step = (window.history.state as { idx?: number } | null)?.idx ?? 0
+    if (step > 0) navigate(-1)
+    else navigate(`/event/${event.id}`, { replace: true })
+  }
+
+  return <Form event={event} onDone={leave} onCancel={leave}
+    organizerId={profile!.id} toast={toast} />
 }
 
 type Ev = NonNullable<Awaited<ReturnType<typeof getEvent>>>
