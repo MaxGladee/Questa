@@ -132,11 +132,18 @@ export default function Quest () {
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-[24px]">Твои задания</h2>
-            {state.quest.source === 'ai' && (
+            {/* Откуда взялись задания, видно сразу: это же и подсказка,
+                что модель была недоступна и сработал запасной путь. */}
+            {state.quest.source === 'ai' ? (
               <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-accent/20
                                px-3 py-1.5 text-[13px] font-semibold text-accent-soft">
                 <SparkIcon className="size-3.5" />
                 придумано ИИ
+              </span>
+            ) : (
+              <span className="shrink-0 rounded-full bg-surface-3 px-3 py-1.5 text-[13px]
+                               font-semibold text-muted">
+                шаблон
               </span>
             )}
           </div>
