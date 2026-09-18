@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { TabScreen } from '../components/Layout'
 import { EventListCard } from '../components/EventCard'
+import { FirstSteps } from '../components/FirstSteps'
 import {
   MapFilters, NO_FILTERS, activeFilterCount, matchesFilters, type MapFilterState,
 } from '../components/MapFilters'
@@ -255,6 +256,13 @@ export default function Home () {
           </Link>
         </header>
 
+        {/* Пока у человека нет ни одной своей встречи, главная объясняет,
+            что делать. Дальше исчезает. */}
+        <FirstSteps
+          interests={profile?.interests.length ?? 0}
+          hasEvent={(events ?? []).some((event) => event.myRole !== 'guest')}
+        />
+
         {active && (
           <Link to={`/event/${active.id}/quest`} className="block rounded-card bg-surface p-3.5">
             <div className="flex items-start gap-4">
@@ -359,7 +367,8 @@ export default function Home () {
             <Empty label={
               query ? 'Ничего не нашлось'
                 : chosen > 0 ? 'Под фильтры ничего не подошло — попробуйте снять часть условий'
-                : 'На этот день чужих ивентов пока нет'
+                : 'На этот день чужих встреч рядом нет. Посмотрите другие дни в календаре '
+                  + 'или соберите свою — идеи ниже.'
             } />
           )}
           {recommended.map((event) => <EventListCard key={event.id} event={event} />)}
