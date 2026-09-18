@@ -11,6 +11,16 @@ export const CATEGORY_ART: Record<CategoryCode, { emoji: string; from: string; t
   bar:        { emoji: '🍸', from: '#BE185D', to: '#7C3AED' },
   walk:       { emoji: '🚶', from: '#1D4ED8', to: '#0891B2' },
   boardgames: { emoji: '🎲', from: '#B45309', to: '#7C3AED' },
+  sport:      { emoji: '🏃', from: '#047857', to: '#0891B2' },
+  food:       { emoji: '🍜', from: '#C2410C', to: '#BE185D' },
+  coffee:     { emoji: '☕', from: '#78350F', to: '#B45309' },
+  theatre:    { emoji: '🎭', from: '#6D28D9', to: '#2563EB' },
+  music:      { emoji: '🎤', from: '#9333EA', to: '#DB2777' },
+  cinema:     { emoji: '🎬', from: '#1E3A8A', to: '#6D28D9' },
+  games:      { emoji: '🎮', from: '#4338CA', to: '#0891B2' },
+  art:   { emoji: '🎨', from: '#BE123C', to: '#7C3AED' },
+  quiz:       { emoji: '🧠', from: '#0E7490', to: '#4338CA' },
+  nature:     { emoji: '🏕', from: '#15803D', to: '#0E7490' },
   other:      { emoji: '✨', from: '#4338CA', to: '#9333EA' },
 }
 

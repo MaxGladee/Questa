@@ -1,7 +1,19 @@
 // Демонстрационные данные. Повторяют структуру таблиц из supabase/01_schema.sql,
 // поэтому при переходе на настоящую базу меняется источник, а не экраны.
 
-export type CategoryCode = 'party' | 'chill' | 'bar' | 'walk' | 'boardgames' | 'other'
+/**
+ * Категории встреч.
+ *
+ * Шести исходных не хватало: «кино», «пробежка», «выставка» и «поиграть в
+ * приставку» одинаково становились «другим», и ни подбор заданий, ни
+ * фильтр на карте от такой категории ничего не получали. Коды прежних
+ * шести не менялись — иначе созданные ивенты остались бы без категории.
+ */
+export type CategoryCode =
+  | 'party' | 'chill' | 'bar' | 'walk' | 'boardgames'
+  | 'sport' | 'food' | 'coffee' | 'theatre' | 'music'
+  | 'cinema' | 'games' | 'art' | 'quiz' | 'nature'
+  | 'other'
 export type EventStatus = 'active' | 'in_progress' | 'finished' | 'cancelled'
 export type TaskType = 'geolocation' | 'photo' | 'quiz'
 
@@ -47,15 +59,37 @@ export const INTERESTS: { code: string; title: string }[] = [
  */
 export const MAX_INTERESTS = 5
 
-/** Категории ивента — только эти шесть, как требует ЧТЗ. */
+/**
+ * Категории ивента.
+ *
+ * В ЧТЗ 5.5 их шесть, и на них строился и подбор мест, и фильтр карты.
+ * На практике шести мало: кино, пробежка, выставка и вечер с приставкой
+ * одинаково становились «другим» — а по такой категории ни заданий не
+ * подобрать, ни ивент на карте не найти. Коды прежних шести сохранены,
+ * чтобы уже созданные встречи не остались без категории, а новые взяты
+ * из списка интересов: одна таблица на то и другое (см. INTERESTS).
+ */
 export const CATEGORIES: { code: CategoryCode; title: string }[] = [
   { code: 'party', title: 'Тусовка' },
   { code: 'chill', title: 'Чилл' },
   { code: 'bar', title: 'Бар' },
   { code: 'walk', title: 'Прогулка' },
   { code: 'boardgames', title: 'Настолки' },
+  { code: 'sport', title: 'Спорт' },
+  { code: 'food', title: 'Поесть' },
+  { code: 'coffee', title: 'Кофе' },
+  { code: 'theatre', title: 'Культура' },
+  { code: 'music', title: 'Музыка' },
+  { code: 'cinema', title: 'Кино' },
+  { code: 'games', title: 'Видеоигры' },
+  { code: 'art', title: 'Творчество' },
+  { code: 'quiz', title: 'Квизы' },
+  { code: 'nature', title: 'Природа' },
   { code: 'other', title: 'Другое' },
 ]
+
+/** Категории, которых нет в исходных интересах, — их добавляет 009. */
+export const NEW_CATEGORY_CODES = ['games', 'nature'] as const
 
 export interface User {
   id: string
@@ -302,7 +336,7 @@ export const EVENTS: QuestaEvent[] = [
     ],
   },
   {
-    id: 'movies',
+    id: 'cinema',
     title: 'Вечер фильмов и сериалов',
     description: 'Группы готовят одно блюдо из одинакового набора продуктов, а потом смотрим то, что выберем голосованием.',
     coverUrl: art('cover-movies.jpg'),

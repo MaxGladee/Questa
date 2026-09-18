@@ -171,6 +171,16 @@ const CATEGORY_TITLES: Record<string, string> = {
   bar: 'Бар',
   walk: 'Прогулка',
   boardgames: 'Настолки',
+  sport: 'Спорт',
+  food: 'Поесть',
+  coffee: 'Кофе',
+  theatre: 'Культура',
+  music: 'Музыка',
+  cinema: 'Кино',
+  games: 'Видеоигры',
+  art: 'Творчество',
+  quiz: 'Квизы',
+  nature: 'Природа',
   other: 'Другое',
 }
 

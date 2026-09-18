@@ -6,9 +6,11 @@ import { addMapTiles, eventPin } from '../lib/map'
 import { TabScreen } from '../components/Layout'
 import { Cover } from '../components/Art'
 import {
-  CATEGORIES, categoryTitle, formatDate, formatTime,
-  type CategoryCode, type QuestaEvent,
+  categoryTitle, formatDate, formatTime, type QuestaEvent,
 } from '../data/demo'
+import {
+  MapFilters, NO_FILTERS, activeFilterCount, matchesFilters, type MapFilterState,
+} from '../components/MapFilters'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { Avatar } from '../components/ui'
 import { LocateIcon, PinIcon } from '../components/icons'
@@ -35,7 +37,8 @@ export default function MapScreen () {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
-  const [categories, setCategories] = useState<CategoryCode[]>([])
+  const [filters, setFilters] = useState<MapFilterState>(NO_FILTERS)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [me, setMe] = useState<[number, number] | null>(null)
   // К своей точке карту подводим один раз — дальше её двигает человек.
   const centeredOnMe = useRef(false)
@@ -102,15 +105,14 @@ export default function MapScreen () {
     return () => { marker.remove() }
   }, [me, profile?.avatarUrl, profile?.nickname])
 
-  // Маркеры пересобираются при смене фильтра категорий (ЧТЗ 5.4).
+  const shown = events.filter((event) => matchesFilters(event, filters, me))
+
+  // Маркеры пересобираются при смене отбора (ЧТЗ 5.4).
   useEffect(() => {
     const instance = map.current
     if (!instance) return
 
     const layer = L.layerGroup().addTo(instance)
-    const shown = events.filter(
-      (event) => categories.length === 0 || categories.includes(event.category),
-    )
 
     for (const event of shown) {
       L.marker([event.lat, event.lng], {
@@ -127,13 +129,11 @@ export default function MapScreen () {
     }
 
     return () => { layer.remove() }
-  }, [categories, events, selected])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown.map((item) => item.id).join(','), selected])
 
-  const toggle = (code: CategoryCode) =>
-    setCategories((list) =>
-      list.includes(code) ? list.filter((c) => c !== code) : [...list, code])
-
-  const event = events.find((item) => item.id === selected)
+  const chosen = activeFilterCount(filters)
+  const event = shown.find((item) => item.id === selected)
 
   function showMe () {
     if (me) {
@@ -170,18 +170,38 @@ export default function MapScreen () {
         */}
         <div ref={container} className="absolute inset-0 z-0 bg-surface" />
 
-        <div className="no-scrollbar pointer-events-auto absolute inset-x-0 top-0 z-10 flex gap-2
-                        overflow-x-auto px-4 pb-3 pt-4">
-          {CATEGORIES.map(({ code, title }) => (
+        {/* Весь отбор — за одной кнопкой: шестнадцать категорий строкой
+            превратились бы в ленту, которую нужно листать до конца. */}
+        <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-2 px-4 pt-4">
+          <button
+            onClick={() => setFiltersOpen(true)}
+            className={`flex items-center gap-2 rounded-full px-4 py-2.5 text-[15px]
+                        font-semibold shadow-lg transition ${
+              chosen > 0 ? 'bg-accent text-white' : 'bg-surface text-white'}`}
+          >
+            Фильтры
+            {chosen > 0 && (
+              <span className="grid size-5 place-items-center rounded-full bg-white text-[12px]
+                               font-bold text-accent">
+                {chosen}
+              </span>
+            )}
+          </button>
+
+          <span className="rounded-full bg-surface/90 px-3.5 py-2 text-[14px] text-muted shadow-lg">
+            {shown.length === events.length
+              ? `${events.length} рядом`
+              : `${shown.length} из ${events.length}`}
+          </span>
+
+          {chosen > 0 && (
             <button
-              key={code} onClick={() => toggle(code)}
-              className={`shrink-0 rounded-full px-4 py-2.5 text-[15px] font-semibold shadow-lg
-                          transition ${
-                categories.includes(code) ? 'bg-accent text-white' : 'bg-surface text-white'}`}
+              onClick={() => setFilters(NO_FILTERS)}
+              className="rounded-full bg-surface/90 px-3.5 py-2 text-[14px] text-muted shadow-lg"
             >
-              {title}
+              Сбросить
             </button>
-          ))}
+          )}
         </div>
 
         {/*
@@ -264,14 +284,25 @@ export default function MapScreen () {
         )}
 
         {/* Пустая карта без объяснения выглядит как поломка. */}
-        {!event && events.length === 0 && (
+        {!event && shown.length === 0 && (
           <div className="absolute inset-x-4 bottom-24 z-10 rounded-card bg-surface p-4
                           text-center shadow-2xl">
-            <p className="text-[17px] font-semibold">Рядом пока пусто</p>
+            <p className="text-[17px] font-semibold">
+              {chosen > 0 ? 'Под фильтры ничего не подошло' : 'Рядом пока пусто'}
+            </p>
             <p className="mt-1 text-[15px] leading-snug text-muted">
-              Никто не создал ивент поблизости. Можно стать первым — идеи есть на главной.
+              {chosen > 0
+                ? 'Попробуйте снять часть условий — например, расстояние или день.'
+                : 'Никто не создал ивент поблизости. Можно стать первым — идеи есть на главной.'}
             </p>
           </div>
+        )}
+
+        {filtersOpen && (
+          <MapFilters
+            filters={filters} found={shown.length}
+            onChange={setFilters} onClose={() => setFiltersOpen(false)}
+          />
         )}
       </div>
     </TabScreen>
