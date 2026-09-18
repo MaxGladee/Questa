@@ -504,6 +504,128 @@ async function questWithClaude (ctx: QuestContext) {
   }
 }
 
+/**
+ * Опрос поставщиков для страницы самопроверки.
+ *
+ * Нужен потому, что в обычной работе отказ первого поставщика не виден:
+ * если ответил следующий, запрос успешен, и причина остаётся только в
+ * журнале функции. Здесь каждый опрашивается отдельно и рассказывает о
+ * себе сам — включая коды ответов по обоим возможным адресам.
+ *
+ * Секреты наружу не выдаются: только длина ключа и его первые символы.
+ */
+async function probeProviders (geminiKey?: string) {
+  const report: Array<{ name: string; ok: boolean; detail: string }> = []
+
+  // ── свой сервис ──
+  const missing = [
+    !AI_BASE_URL && 'AI_BASE_URL',
+    !AI_API_KEY && 'AI_API_KEY',
+    !AI_MODEL && 'AI_MODEL',
+  ].filter(Boolean)
+
+  if (missing.length) {
+    report.push({
+      name: 'Свой сервис',
+      ok: false,
+      detail: `не настроен: не задано ${missing.join(', ')}`,
+    })
+  } else {
+    const head = `${AI_BASE_URL} · модель ${AI_MODEL} · ключ ${AI_API_KEY.slice(0, 3)}…`
+      + `${AI_API_KEY.length} символов`
+
+    // Сначала дёшево: список моделей по обоим адресам. Код ответа сразу
+    // говорит, верен ли адрес и принимают ли ключ, и не тратит токены.
+    const paths = [`${AI_BASE_URL}/models`]
+    if (!/\/v\d+$/.test(AI_BASE_URL)) paths.push(`${AI_BASE_URL}/v1/models`)
+
+    const seen: string[] = []
+    for (const path of paths) {
+      try {
+        const response = await fetch(path, {
+          headers: { authorization: `Bearer ${AI_API_KEY}` },
+        })
+        const body = (await response.text()).slice(0, 200)
+        seen.push(`${path} → ${response.status} ${body}`)
+      } catch (cause) {
+        seen.push(`${path} → не отвечает: ${cause instanceof Error ? cause.message : cause}`)
+      }
+    }
+
+    // Затем настоящий запрос — тот же, что уходит за квестом, но крошечный.
+    try {
+      const reply = await askCustom(
+        [{ role: 'user', content: 'Верни JSON: {"ok": true, "reason": "готов"}' }],
+        PHOTO_FORMAT.schema,
+        100,
+      )
+      report.push({
+        name: 'Свой сервис',
+        ok: true,
+        detail: `${head} · ответил: ${JSON.stringify(reply).slice(0, 120)}`,
+      })
+    } catch (cause) {
+      report.push({
+        name: 'Свой сервис',
+        ok: false,
+        detail: `${head} · запрос: ${cause instanceof Error ? cause.message : cause} · `
+          + seen.join(' | '),
+      })
+    }
+  }
+
+  // ── Claude ──
+  if (!claude) {
+    report.push({
+      name: 'Claude',
+      ok: false,
+      detail: CLAUDE_KEY ? keyHint() : 'не настроен: ANTHROPIC_API_KEY не задан',
+    })
+  } else {
+    try {
+      await claude.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 16,
+        messages: [{ role: 'user', content: 'Ответь словом: готов' }],
+      })
+      report.push({ name: 'Claude', ok: true, detail: `${CLAUDE_MODEL} ответил` })
+    } catch (cause) {
+      report.push({
+        name: 'Claude',
+        ok: false,
+        detail: `${CLAUDE_MODEL}: ${cause instanceof Error ? cause.message : cause}`,
+      })
+    }
+  }
+
+  // ── Gemini ──
+  if (!geminiKey) {
+    report.push({ name: 'Gemini', ok: false, detail: 'не настроен: GEMINI_API_KEY не задан' })
+  } else {
+    const model = MODELS[0]
+    try {
+      const response = await fetch(`${ENDPOINT}/${model}:generateContent?key=${geminiKey}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: 'Ответь словом: готов' }] }] }),
+      })
+      report.push({
+        name: 'Gemini',
+        ok: response.ok,
+        detail: response.ok ? `${model} ответил` : `${model} → ${response.status}`,
+      })
+    } catch (cause) {
+      report.push({
+        name: 'Gemini',
+        ok: false,
+        detail: `${model}: ${cause instanceof Error ? cause.message : cause}`,
+      })
+    }
+  }
+
+  return report
+}
+
 /** Квест от стороннего провайдера — тот же контекст, та же схема. */
 async function questWithCustom (ctx: QuestContext) {
   if (!customReady) return null
@@ -722,6 +844,10 @@ Deno.serve(async (request) => {
     return json({ error: 'Некорректный запрос' }, 400)
   }
 
+  if ((payload as { kind?: string })?.kind === 'probe') {
+    return json({ providers: await probeProviders(apiKey) })
+  }
+
   if ((payload as PhotoRequest)?.kind === 'photo') {
     const request = payload as PhotoRequest
     if (!request.prompt || !request.image) {
@@ -769,6 +895,7 @@ Deno.serve(async (request) => {
     try {
       const quest = await questWithCustom(ctx)
       if (quest) return json({ ...quest, model: AI_MODEL })
+      failures.push(`${AI_MODEL}: ответ без нужных полей`)
     } catch (cause) {
       console.error('custom quest failed', cause)
       failures.push(`${AI_MODEL}: ${cause instanceof Error ? cause.message : cause}`)

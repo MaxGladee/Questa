@@ -42,6 +42,8 @@ export default function Health () {
   const [aiBusy, setAiBusy] = useState(false)
   const [photoState, setPhotoState] = useState<Check | null>(null)
   const [photoBusy, setPhotoBusy] = useState(false)
+  const [providers, setProviders] = useState<Check[]>([])
+  const [providersBusy, setProvidersBusy] = useState(false)
 
   useEffect(() => { void runChecks() }, [session?.user.id])
 
@@ -322,6 +324,74 @@ export default function Health () {
   }
 
   /**
+   * Опрос поставщиков модели.
+   *
+   * В обычной работе отказ первого поставщика не виден: если ответил
+   * следующий, запрос успешен. Здесь каждый опрашивается отдельно и
+   * рассказывает, что с ним не так.
+   */
+  async function checkProviders () {
+    setProvidersBusy(true)
+    setProviders([{
+      key: 'probe', title: 'Поставщики модели', status: 'checking', detail: 'опрашиваем…',
+    }])
+
+    try {
+      const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string
+      const token = (await db().auth.getSession()).data.session?.access_token
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-quest`,
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            apikey: key,
+            authorization: `Bearer ${token ?? key}`,
+          },
+          body: JSON.stringify({ kind: 'probe' }),
+        },
+      )
+
+      const raw = await response.text()
+
+      if (!response.ok) {
+        setProviders([{
+          key: 'probe', title: 'Поставщики модели', status: 'fail',
+          detail: `${response.status}: ${raw.slice(0, 300)}`,
+        }])
+        return
+      }
+
+      const data = JSON.parse(raw) as {
+        providers?: Array<{ name: string; ok: boolean; detail: string }>
+      }
+
+      if (!data.providers?.length) {
+        setProviders([{
+          key: 'probe', title: 'Поставщики модели', status: 'warn',
+          detail: 'функция ещё не умеет опрашивать поставщиков — передеплойте её',
+        }])
+        return
+      }
+
+      setProviders(data.providers.map((item, index) => ({
+        key: `provider-${index}`,
+        title: item.name,
+        status: item.ok ? 'ok' : 'warn',
+        detail: item.detail,
+      })))
+    } catch (cause) {
+      setProviders([{
+        key: 'probe', title: 'Поставщики модели', status: 'fail',
+        detail: cause instanceof Error ? cause.message : 'не удалось опросить',
+      }])
+    } finally {
+      setProvidersBusy(false)
+    }
+  }
+
+  /**
    * Проверка разбора фотографии.
    *
    * Снимок рисуется прямо здесь: красный круг на белом. Модель должна
@@ -375,7 +445,7 @@ export default function Health () {
     }
   }
 
-  const all = [...checks, aiState, photoState].filter(Boolean) as Check[]
+  const all = [...checks, ...providers, aiState, photoState].filter(Boolean) as Check[]
 
   return (
     <div className="no-scrollbar h-full overflow-y-auto px-5 pb-10 pt-6">
@@ -421,6 +491,9 @@ export default function Health () {
 
       <div className="mt-6 space-y-3">
         <Button variant="ghost" onClick={runChecks}>Проверить заново</Button>
+        <Button variant="ghost" disabled={providersBusy} onClick={checkProviders}>
+          {providersBusy ? 'Опрашиваем…' : 'Проверить поставщиков модели'}
+        </Button>
         <Button disabled={aiBusy} onClick={checkAI}>
           {aiBusy ? 'Спрашиваем модель…' : 'Проверить генерацию квеста'}
         </Button>
