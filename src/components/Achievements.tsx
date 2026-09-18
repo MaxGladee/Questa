@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import type { User } from '../data/demo'
 import { levelFromExp } from '../data/demo'
 import { syncAchievements } from '../lib/api'
 import { CloseIcon } from './icons'
@@ -31,8 +30,20 @@ export interface Achievement {
   earnedAt?: string
 }
 
+/**
+ * Всё, что нужно для подсчёта ачивок. Не профиль целиком: те же ачивки
+ * показываются и в чужом профиле, а там полей меньше.
+ */
+export interface AchievementSource {
+  expTotal: number
+  eventsAttended: number
+  eventsHosted: number
+  streakDays: number
+  averageRating: number
+}
+
 export function achievementsFor (
-  profile: User, dates: Record<string, string> = {},
+  profile: AchievementSource, dates: Record<string, string> = {},
 ): Achievement[] {
   const level = levelFromExp(profile.expTotal)
 
@@ -193,7 +204,7 @@ function AchievementCard ({ item, onClose }: { item: Achievement; onClose: () =>
   )
 }
 
-export function Achievements ({ profile }: { profile: User }) {
+export function Achievements ({ profile }: { profile: AchievementSource & { id: string } }) {
   const [dates, setDates] = useState<Record<string, string>>({})
   const [open, setOpen] = useState<Achievement | null>(null)
 

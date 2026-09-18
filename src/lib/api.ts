@@ -930,6 +930,8 @@ export interface PublicProfile {
   interests: string[]
   /** Когда человек появился в приложении. */
   since: string
+  /** Сколько встреч у вас общих — считается только для чужого профиля. */
+  together: number
 }
 
 // «с июня 2026», а не «с июнь 2026»: встроенное форматирование даёт месяц
@@ -945,11 +947,35 @@ function monthAndYear (iso: string): string {
 }
 
 /**
+ * Сколько встреч у вас общих.
+ *
+ * «Были вместе трижды» говорит о незнакомце больше, чем средний балл:
+ * человека, с которым уже ходили, и зовут иначе, и оценивают иначе.
+ * Считаются только состоявшиеся встречи — по ним и правда пересекались.
+ */
+async function sharedEvents (userId: string, viewerId: string | null): Promise<number> {
+  if (!viewerId || viewerId === userId) return 0
+
+  const client = db()
+  const [mine, theirs] = await Promise.all([
+    client.from('event_participant').select('event_id, event!inner(counted)')
+      .eq('user_id', viewerId).eq('event.counted', true),
+    client.from('event_participant').select('event_id, event!inner(counted)')
+      .eq('user_id', userId).eq('event.counted', true),
+  ])
+
+  const seen = new Set((mine.data ?? []).map((row: Row) => row.event_id))
+  return (theirs.data ?? []).filter((row: Row) => seen.has(row.event_id)).length
+}
+
+/**
  * Карточка другого участника (ЧТЗ 5.6): по ней решают, идти ли на встречу
  * с незнакомым человеком. Баланс QP здесь не показывается — это личное,
  * в отличие от уровня и оценок, которые как раз и говорят о человеке.
  */
-export async function getPublicProfile (userId: string): Promise<PublicProfile> {
+export async function getPublicProfile (
+  userId: string, viewerId?: string | null,
+): Promise<PublicProfile> {
   if (!isLive) {
     const known = EVENTS.flatMap((event) => event.participants)
       .find((person) => person.id === userId)
@@ -966,6 +992,7 @@ export async function getPublicProfile (userId: string): Promise<PublicProfile> 
       eventsHosted: 3,
       interests: ['party', 'chill', 'boardgames'],
       since: 'июня 2026',
+      together: 2,
     }
   }
 
@@ -978,12 +1005,13 @@ export async function getPublicProfile (userId: string): Promise<PublicProfile> 
   if (error) throw error
   if (!row) throw new Error('Пользователь не найден')
 
-  const [{ data: interests }, attended, hosted] = await Promise.all([
+  const [{ data: interests }, attended, hosted, together] = await Promise.all([
     client.from('user_interest').select('interest (code)').eq('user_id', userId),
     client.from('event_participant').select('id, event!inner(counted)', { count: 'exact', head: true })
       .eq('user_id', userId).not('checked_in_at', 'is', null).eq('event.counted', true),
     client.from('event').select('id', { count: 'exact', head: true })
       .eq('organizer_id', userId).eq('counted', true),
+    sharedEvents(userId, viewerId ?? null),
   ])
 
   return {
@@ -994,6 +1022,7 @@ export async function getPublicProfile (userId: string): Promise<PublicProfile> 
     expTotal: row.exp_total,
     averageRating: Number(row.average_rating ?? 0),
     streakDays: row.streak_days,
+    together,
     eventsAttended: attended.count ?? 0,
     eventsHosted: hosted.count ?? 0,
     interests: (interests ?? []).flatMap((item: Row) => {
