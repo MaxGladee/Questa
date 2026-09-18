@@ -56,8 +56,14 @@ export default function PhotoTask (
     setError('')
 
     try {
-      // Сначала проверка, потом сохранение: незачтённый снимок незачем хранить.
-      const result = await verifyPhoto(prompt, await toBase64(shot))
+      // Модели уходит уменьшенная копия, а в хранилище — снимок покрупнее.
+      //
+      // Картинку модель считает плитками: кадр в 1280 точек стоит вдвое
+      // дороже, чем в 900, а «есть ли в кадре вывеска» одинаково видно и
+      // там, и там. Платит за токены владелец ключа, и эта экономия ему
+      // достаётся даром.
+      const forModel = await shrinkImage(shot, 900, 0.8)
+      const result = await verifyPhoto(prompt, await toBase64(forModel))
       setVerdict(result)
 
       if (result.ok) {
