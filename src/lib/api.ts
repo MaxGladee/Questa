@@ -871,6 +871,62 @@ export async function claimLevelReward (userId: string, level: number): Promise<
   return amount
 }
 
+// ──────────────────────────── ачивки ─────────────────────────────────
+
+/**
+ * Даты получения ачивок.
+ *
+ * Сами ачивки считаются по числам профиля и нигде не хранятся, поэтому
+ * помнить, когда именно условие сошлось, приходится отдельно. Приложение
+ * при открытии профиля присылает список уже выполненных — новые
+ * записываются с текущей датой, старые остаются нетронутыми.
+ *
+ * Сбой записи ничего не ломает: ачивка всё равно показывается полученной,
+ * просто без даты, а дата допишется при следующем заходе.
+ */
+export async function syncAchievements (
+  userId: string, earnedCodes: string[],
+): Promise<Record<string, string>> {
+  if (!isLive) return demoAchievements(userId, earnedCodes)
+
+  const client = db()
+  const { data } = await client.from('achievement')
+    .select('code, earned_at').eq('user_id', userId)
+
+  const dates: Record<string, string> = {}
+  for (const row of (data ?? []) as Row[]) dates[row.code] = row.earned_at
+
+  const fresh = earnedCodes.filter((code) => !dates[code])
+  if (fresh.length > 0) {
+    const now = new Date().toISOString()
+    const { error } = await client.from('achievement')
+      .insert(fresh.map((code) => ({ user_id: userId, code, earned_at: now })))
+
+    if (!error) for (const code of fresh) dates[code] = now
+  }
+
+  return dates
+}
+
+/** Те же даты в демонстрационном режиме — в памяти браузера. */
+function demoAchievements (userId: string, earnedCodes: string[]): Record<string, string> {
+  const key = `questa:achievements:${userId}`
+  let dates: Record<string, string> = {}
+
+  try {
+    dates = JSON.parse(localStorage.getItem(key) ?? '{}')
+  } catch { dates = {} }
+
+  const now = new Date().toISOString()
+  let added = false
+  for (const code of earnedCodes) {
+    if (!dates[code]) { dates[code] = now; added = true }
+  }
+
+  if (added) try { localStorage.setItem(key, JSON.stringify(dates)) } catch { /* приват-режим */ }
+  return dates
+}
+
 // ──────────────────────────── жалобы ─────────────────────────────────
 
 /**
