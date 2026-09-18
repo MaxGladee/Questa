@@ -29,6 +29,17 @@ jobs:
 
       - run: npm ci
 
+      # Без ключей проекта сборка получается демонстрационной: экраны
+      # наполняются выдуманными данными, вход не работает, и внешне это
+      # почти незаметно. Лучше не собрать вовсе, чем опубликовать такое.
+      - name: Проверить ключи проекта
+        run: |
+          test -f .env || { echo "::error::Нет файла .env — сборка вышла бы демонстрационной"; exit 1; }
+          grep -q '^VITE_SUPABASE_URL=https' .env \
+            || { echo "::error::В .env нет адреса Supabase"; exit 1; }
+          grep -q '^VITE_SUPABASE_PUBLISHABLE_KEY=sb_' .env \
+            || { echo "::error::В .env нет публичного ключа Supabase"; exit 1; }
+
       - run: npm run build
         env:
           BASE_PATH: /${{ github.event.repository.name }}/

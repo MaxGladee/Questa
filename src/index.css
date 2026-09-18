@@ -1,8 +1,40 @@
 @import "tailwindcss";
 
-/* Палитра снята пипеткой с экспортов Figma, а не подобрана на глаз.
-   Шрифт — SF Pro (ЧТЗ 10.2): на iPhone его даёт -apple-system, на остальных
-   устройствах подставляется ближайший системный гротеск. */
+/* Шрифт интерфейса — Rubik.
+   В макетах стоят SF Compact Rounded и SF Pro: это системные шрифты Apple,
+   и на Android они просто не существуют — там подставлялся Roboto, и экран
+   выглядел иначе, чем задумано. Rubik ближе всего к макетам из того, что
+   можно положить в проект: мягкие скруглённые окончания и спокойная
+   кириллица.
+
+   Файлы лежат рядом, в src/assets/fonts, а не грузятся с Google Fonts:
+   так шрифт не зависит от доступности чужого домена и приходит вместе с
+   приложением. Подключены только кириллица и латиница нужных начертаний —
+   четверть мегабайта на всё. */
+
+/* Начертания не отдельными файлами: Rubik переменный, и один файл
+   отдаёт всю шкалу от 300 до 900 — обычный текст, полужирный и заголовки.
+   Кириллица и латиница разделены по диапазонам: латинский файл не
+   скачивается, пока на экране нет латиницы. */
+@font-face {
+  font-family: 'Rubik';
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url('./assets/fonts/rubik-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+@font-face {
+  font-family: 'Rubik';
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url('./assets/fonts/rubik-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Палитра снята пипеткой с экспортов Figma, а не подобрана на глаз. */
 @theme {
   --color-bg:        #0F082C;
   --color-surface:   #1B1437;
@@ -20,7 +52,9 @@
   --color-text:      #FFFFFF;
   --color-muted:     #9A93B8;
 
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+  /* Системные шрифты остаются запасными: пока свой не загрузился, текст
+     показывается ими, а не исчезает. */
+  --font-sans: "Rubik", -apple-system, BlinkMacSystemFont, "SF Pro Text",
                "Segoe UI", system-ui, sans-serif;
 
   --radius-card:  20px;
