@@ -1,3 +1,5 @@
+import editorStyle from '../data/map-style.json'
+
 /**
  * Загрузка JavaScript API Яндекс Карт.
  *
@@ -80,52 +82,37 @@ export function loadYmaps (): Promise<Ymaps | null> {
 }
 
 /**
- * Оформление карты под приложение.
+ * Оформление карты.
  *
  * Схема Яндекса векторная, поэтому её цвета задаются не фильтром поверх
- * картинки, а списком правил: что закрашивать и чем. Здесь тот же тёмно-
- * фиолетовый фон, что у экранов, приглушённые дороги и подписи, которые
- * читаются, но не спорят с метками ивентов.
+ * картинки, а списком правил. Основной список — `src/data/map-style.json`,
+ * выгрузка из Редактора стилей Яндекса
+ * (yandex.ru/maps-api/map-style-editor): там карта настраивается
+ * ползунками и сохраняется таким же JSON. Чтобы поставить новую версию,
+ * достаточно заменить файл.
  *
- * Список можно заменить целиком: в Редакторе стилей Яндекса
- * (yandex.ru/maps-api/map-style-editor) карта настраивается ползунками и
- * выгружается таким же JSON.
+ * Рядом остался прежний, написанный руками набор правил — на случай, если
+ * с выгрузкой что-то не так и нужно быстро вернуться к рабочему виду.
+ * Переключение — одним словом ниже.
  */
-export const MAP_STYLE = [
-  // Земля — темнее фона приложения: всё, что на ней лежит, должно читаться
-  // как более светлое. Раньше она была почти одного тона с дорогами, и
-  // карта выглядела однородным пятном.
-  { tags: 'landscape', elements: 'geometry', stylers: [{ color: '#120A2B' }] },
-  { tags: 'land', elements: 'geometry', stylers: [{ color: '#120A2B' }] },
+/** Откуда брать оформление: 'editor' — файл из Редактора, 'simple' — набор ниже. */
+const STYLE_SOURCE: 'editor' | 'simple' = 'editor'
 
-  // Вода заметно синее земли: иначе река и пруд теряются среди кварталов.
-  { tags: 'water', elements: 'geometry', stylers: [{ color: '#0A1747' }] },
+/**
+ * Прополка подписей поверх выбранного оформления.
+ *
+ * На экране телефона город умещается целиком, и Яндекс подписывает на нём
+ * всё подряд: каждый переулок, каждую станцию, каждое кафе. За подписями
+ * перестают читаться метки ивентов, а они здесь главное. Правила идут
+ * последними и поэтому перекрывают то, что задано выше.
+ *
+ * Не нравится — поставьте false, и подписи вернутся все.
+ */
+const QUIET_LABELS = true
 
-  // Зелень — единственный не фиолетовый цвет на карте, и этого достаточно,
-  // чтобы парк было видно с одного взгляда.
-  { tags: 'vegetation', elements: 'geometry', stylers: [{ color: '#123526' }] },
-  { tags: 'park', elements: 'geometry', stylers: [{ color: '#123526' }] },
+type Rule = Record<string, unknown>
 
-  // Кварталы: светлее земли, но темнее дорог — получается три различимых
-  // слоя вместо одного.
-  { tags: 'building', elements: 'geometry', stylers: [{ color: '#241B4B' }] },
-
-  // Дороги — самое светлое на карте после меток. По ним считывается
-  // рисунок города, ради этого карта и нужна.
-  { tags: 'road', elements: 'geometry', stylers: [{ color: '#5B4E9C' }] },
-  { tags: 'road_minor', elements: 'geometry', stylers: [{ color: '#3B3070' }] },
-  { tags: 'transit', elements: 'geometry', stylers: [{ color: '#2A2150' }] },
-  { tags: 'admin', elements: 'geometry', stylers: [{ color: '#2A2150' }] },
-
-  // Подписи: светлее прежнего и с плотной обводкой — мелкий текст на
-  // тёмном иначе расплывается.
-  { tags: 'label', elements: 'label.text.fill', stylers: [{ color: '#E2DCFA' }] },
-  { tags: 'label', elements: 'label.text.outline', stylers: [{ color: '#0B0522' }] },
-
-  // Дальше — прополка. На экране телефона карта города умещается целиком,
-  // и Яндекс подписывает на ней всё подряд: каждый переулок, каждую
-  // станцию, каждое кафе. Из-за этого не видно меток ивентов, а они здесь
-  // главное. Оставляем названия районов, воды, крупных улиц и парков.
+const QUIET: Rule[] = [
   { tags: 'road_minor', elements: 'label', stylers: [{ visibility: 'off' }] },
   { tags: 'poi', elements: 'label', stylers: [{ visibility: 'off' }] },
   { tags: 'transit', elements: 'label', stylers: [{ visibility: 'off' }] },
@@ -133,4 +120,25 @@ export const MAP_STYLE = [
   { tags: 'address', elements: 'label', stylers: [{ visibility: 'off' }] },
   { tags: 'entrance', elements: 'label', stylers: [{ visibility: 'off' }] },
   { tags: 'building', elements: 'label', stylers: [{ visibility: 'off' }] },
+]
+
+/** Запасное оформление: то, что было до Редактора стилей. */
+const SIMPLE_STYLE: Rule[] = [
+  { tags: 'landscape', elements: 'geometry', stylers: [{ color: '#120A2B' }] },
+  { tags: 'land', elements: 'geometry', stylers: [{ color: '#120A2B' }] },
+  { tags: 'water', elements: 'geometry', stylers: [{ color: '#0A1747' }] },
+  { tags: 'vegetation', elements: 'geometry', stylers: [{ color: '#123526' }] },
+  { tags: 'park', elements: 'geometry', stylers: [{ color: '#123526' }] },
+  { tags: 'building', elements: 'geometry', stylers: [{ color: '#241B4B' }] },
+  { tags: 'road', elements: 'geometry', stylers: [{ color: '#5B4E9C' }] },
+  { tags: 'road_minor', elements: 'geometry', stylers: [{ color: '#3B3070' }] },
+  { tags: 'transit', elements: 'geometry', stylers: [{ color: '#2A2150' }] },
+  { tags: 'admin', elements: 'geometry', stylers: [{ color: '#2A2150' }] },
+  { tags: 'label', elements: 'label.text.fill', stylers: [{ color: '#E2DCFA' }] },
+  { tags: 'label', elements: 'label.text.outline', stylers: [{ color: '#0B0522' }] },
+]
+
+export const MAP_STYLE: Rule[] = [
+  ...(STYLE_SOURCE === 'editor' ? (editorStyle as Rule[]) : SIMPLE_STYLE),
+  ...(QUIET_LABELS ? QUIET : []),
 ]
