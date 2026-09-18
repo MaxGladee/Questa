@@ -6,7 +6,7 @@ import { Avatar } from '../components/ui'
 import type { ChatMessage } from '../data/demo'
 import {
   QUEST_READY, chatImageUrl, fileComplaint, getEvent, getQuest, listMessages,
-  sendMessage, subscribeMessages, uploadImage,
+  markChatRead, sendMessage, subscribeMessages, uploadImage,
 } from '../lib/api'
 import { ReportSheet } from '../components/ReportSheet'
 import { Lightbox } from '../components/Lightbox'
@@ -115,6 +115,18 @@ export default function Chat () {
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: 'end' })
   }, [messages.length])
+
+  /**
+   * Отметка «прочитано».
+   *
+   * Ставится и при входе, и на каждое новое сообщение, пока чат открыт:
+   * человек его видит прямо сейчас, и оставлять счётчик на карточке
+   * встречи неправильно. Время ставит база — часам телефона веры нет.
+   */
+  useEffect(() => {
+    if (!id || !profile) return
+    markChatRead(id)
+  }, [id, profile?.id, messages.length])
 
   async function send (text?: string) {
     const body = (text ?? draft).trim()

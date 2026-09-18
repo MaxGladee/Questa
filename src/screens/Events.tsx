@@ -4,7 +4,7 @@ import { EventListCard } from '../components/EventCard'
 import { Empty, Failed, Loading } from '../components/States'
 import type { QuestaEvent } from '../data/demo'
 import { useAuth } from '../lib/auth'
-import { listEvents, myEventRatings } from '../lib/api'
+import { listEvents, myEventRatings, unreadChats } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
 
 /**
@@ -25,6 +25,11 @@ export default function Events () {
   const { data: scores } = useAsync(
     () => profile ? myEventRatings(profile.id) : Promise.resolve<Record<string, number>>({}),
     [profile?.id],
+  )
+
+  // Непрочитанные сообщения — одним запросом на все встречи.
+  const { data: unread } = useAsync(
+    () => profile ? unreadChats() : Promise.resolve<Record<string, number>>({}), [profile?.id],
   )
 
   const mine = (data ?? []).filter((event) => event.myRole !== 'guest')
@@ -73,7 +78,10 @@ export default function Events () {
               {group.title} · {group.events.length}
             </h2>
             {group.events.map((event) => (
-              <EventListCard key={event.id} event={event} myScore={scores?.[event.id]} />
+              <EventListCard
+                key={event.id} event={event}
+                myScore={scores?.[event.id]} unread={unread?.[event.id]}
+              />
             ))}
           </section>
         ))}

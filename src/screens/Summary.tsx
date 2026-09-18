@@ -238,6 +238,15 @@ export default function Summary () {
         >
           {busy ? 'Отправляем…' : waiting > 0 ? 'Отправить и закрыть' : 'Готово'}
         </Button>
+
+        {/* После встречи в чате договаривают: где кто забыл зонт, когда
+            повторим. Попасть туда из итогов было нельзя — только через
+            карточку встречи, до которой ещё нужно догадаться дойти. */}
+        {event.chatOpened && (
+          <Link to={`/event/${event.id}/chat`} className="block">
+            <Button variant="ghost">Открыть чат встречи</Button>
+          </Link>
+        )}
       </div>
     </PlainScreen>
   )

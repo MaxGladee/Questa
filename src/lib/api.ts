@@ -1668,6 +1668,29 @@ export function subscribeNotifications (
 
 // ───────────────────────────────── чат ──────────────────────────────────
 
+/**
+ * Сколько непрочитанных сообщений в чатах своих встреч.
+ *
+ * Одним запросом на все встречи: списку нужны сразу все числа, а
+ * спрашивать по одному — это десяток запросов там, где хватает одного
+ * (функция базы из миграции 014). Свои сообщения не считаются: человек
+ * знает, что написал.
+ */
+export async function unreadChats (): Promise<Record<string, number>> {
+  if (!isLive) return {}
+
+  const { data } = await db().rpc('unread_chats')
+  return Object.fromEntries(
+    ((data ?? []) as Row[]).map((row) => [row.event_id, Number(row.unread)]),
+  )
+}
+
+/** Отметить чат прочитанным. Время ставит база: часам телефона веры нет. */
+export async function markChatRead (eventId: string): Promise<void> {
+  if (!isLive) return
+  await db().rpc('mark_chat_read', { event_id: eventId }).then(undefined, () => {})
+}
+
 export async function listMessages (eventId: string): Promise<ChatMessage[]> {
   if (!isLive) return MESSAGES.filter((message) => message.eventId === eventId)
 

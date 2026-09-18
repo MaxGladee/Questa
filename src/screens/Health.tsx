@@ -161,6 +161,7 @@ export default function Health () {
       { key: '011_quiz_and_edit_limits', title: '011 — ответы квиза и лимит правок' },
       { key: '012_rate_reminder', title: '012 — напоминание оценить встречу' },
       { key: '013_invite_card', title: '013 — карточка встречи по ссылке' },
+      { key: '014_chat_unread', title: '014 — непрочитанные сообщения' },
     ]
 
     try {

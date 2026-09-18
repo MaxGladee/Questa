@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { CalendarIcon, ChevronIcon, PinIcon, StarIcon, UserIcon } from './icons'
+import { CalendarIcon, ChevronIcon, PinIcon, SparkIcon, StarIcon, UserIcon } from './icons'
 import { Cover } from './Art'
 import { formatDate, formatTime, type EventStatus, type QuestaEvent } from '../data/demo'
 
@@ -13,10 +13,12 @@ const STATUS_LABEL: Partial<Record<EventStatus, string>> = {
 
 /** Карточка ивента в списке — состав элементов задан в ЧТЗ 5.3. */
 export function EventListCard (
-  { event, myScore }: {
+  { event, myScore, unread }: {
     event: QuestaEvent
     /** Балл, который человек уже поставил этой встрече, если оценивал. */
     myScore?: number
+    /** Сколько сообщений в чате человек ещё не видел. */
+    unread?: number
   },
 ) {
   return (
@@ -64,6 +66,15 @@ export function EventListCard (
           {event.participants.length} из {event.maxParticipants}
           {event.myRole === 'organizer' ? ' · вы организатор' : ''}
         </span>
+
+        {/* Новые сообщения: иначе о них узнаёшь, только зайдя в чат. */}
+        {(unread ?? 0) > 0 && (
+          <span className="flex items-center gap-1.5 rounded-xl bg-accent px-3 py-1.5
+                           text-[14px] font-semibold">
+            <SparkIcon className="size-4" />
+            {unread} в чате
+          </span>
+        )}
 
         {/* Оценка ставится один раз, поэтому важно видеть, что она уже
             поставлена, не открывая итоги. */}

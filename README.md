@@ -215,7 +215,8 @@ npm run dev
 `005_quest_at_start.sql` → `006_live_notifications.sql` →
 `007_achievements.sql` → `008_event_ending.sql` → `009_more_categories.sql` →
 `010_event_edits.sql` → `011_quiz_and_edit_limits.sql` →
-`012_rate_reminder.sql` → `013_invite_card.sql`. Каждый файл можно
+`012_rate_reminder.sql` → `013_invite_card.sql` → `014_chat_unread.sql`.
+Каждый файл можно
 выполнять повторно: они переопределяют функции и не дублируют данные.
 
 Отдельно лежит `supabase/reset.sql` — он в этот порядок не входит и
