@@ -1388,7 +1388,7 @@ export async function reverseGeocode (lat: number, lng: number): Promise<string>
  * supabase/002_photos_and_interests.sql: подменить чужой аватар нельзя.
  */
 export async function uploadImage (
-  file: File, userId: string, kind: 'avatar' | 'cover' | 'chat',
+  file: File, userId: string, kind: 'avatar' | 'cover' | 'chat' | 'task',
 ): Promise<string> {
   if (!isLive) throw new Error('Загрузка недоступна без базы')
 
@@ -1431,19 +1431,30 @@ export interface PhotoVerdict {
  * ответе, чтобы человек понимал, что произошло.
  */
 export async function verifyPhoto (prompt: string, base64: string): Promise<PhotoVerdict> {
-  if (!isLive) return { ok: true, reason: '', skipped: true }
+  if (!isLive) return { ok: true, reason: 'Демонстрационный режим — без базы', skipped: true }
 
   try {
     const { data, error } = await db().functions.invoke('generate-quest', {
       body: { kind: 'photo', prompt, image: base64 },
     })
 
-    if (error || typeof data?.ok !== 'boolean') {
-      return { ok: true, reason: '', skipped: true }
+    // Причина отказа достаётся из тела ответа: иначе «снимок принят»
+    // выглядит одинаково и когда модель посмотрела, и когда её не было.
+    if (error) {
+      const details = await readFunctionError(error)
+      return { ok: true, reason: details || error.message, skipped: true }
+    }
+
+    if (typeof data?.ok !== 'boolean') {
+      return { ok: true, reason: String(data?.error ?? 'Ответ модели не разобран'), skipped: true }
     }
 
     return { ok: data.ok, reason: String(data.reason ?? ''), skipped: false }
-  } catch {
-    return { ok: true, reason: '', skipped: true }
+  } catch (problem) {
+    return {
+      ok: true,
+      reason: problem instanceof Error ? problem.message : 'Функция недоступна',
+      skipped: true,
+    }
   }
 }

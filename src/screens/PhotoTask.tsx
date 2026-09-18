@@ -65,7 +65,7 @@ export default function PhotoTask (
         // хранилище недоступно, задание всё равно засчитывается: терять
         // выполненное из-за неудачной загрузки несправедливо.
         try {
-          setPhotoUrl(await uploadImage(shot, userId, 'cover'))
+          setPhotoUrl(await uploadImage(shot, userId, 'task'))
         } catch {
           setPhotoUrl(undefined)
         }
@@ -126,13 +126,21 @@ export default function PhotoTask (
         {stage === 'verdict' && verdict && (
           <>
             <p className={`text-center text-[17px] leading-snug ${
-              verdict.ok ? 'text-success' : 'text-yellow-300'}`}>
+              verdict.skipped ? 'text-muted' : verdict.ok ? 'text-success' : 'text-yellow-300'}`}>
               {verdict.skipped
-                ? 'Снимок принят'
+                ? 'Проверка недоступна — снимок принят на слово'
                 : verdict.ok
                   ? verdict.reason || 'Снимок подходит'
                   : verdict.reason || 'Кажется, на снимке не то, что нужно'}
             </p>
+
+            {/* Почему модель не посмотрела — мелким шрифтом: человеку это
+                не мешает, а понять, что сломалось, без этого нельзя. */}
+            {verdict.skipped && verdict.reason && (
+              <p className="text-center text-[13px] leading-snug text-muted/70">
+                {verdict.reason}
+              </p>
+            )}
 
             {verdict.ok ? (
               <Button onClick={() => onDone(photoUrl)}>Забрать +{task.qpReward} QP</Button>

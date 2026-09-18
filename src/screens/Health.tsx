@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '../components/ui'
+import { verifyPhoto } from '../lib/api'
 import { db, isLive } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 
@@ -39,6 +40,8 @@ export default function Health () {
   const [checks, setChecks] = useState<Check[]>([])
   const [aiState, setAiState] = useState<Check | null>(null)
   const [aiBusy, setAiBusy] = useState(false)
+  const [photoState, setPhotoState] = useState<Check | null>(null)
+  const [photoBusy, setPhotoBusy] = useState(false)
 
   useEffect(() => { void runChecks() }, [session?.user.id])
 
@@ -314,7 +317,61 @@ export default function Health () {
     }
   }
 
-  const all = aiState ? [...checks, aiState] : checks
+  /**
+   * Проверка разбора фотографии.
+   *
+   * Снимок рисуется прямо здесь: красный круг на белом. Модель должна
+   * увидеть именно его — по ответу сразу понятно, смотрит она на картинку
+   * или отвечает наугад. Настоящее фото для этого просить незачем.
+   */
+  async function checkPhotoVision () {
+    setPhotoBusy(true)
+    setPhotoState({
+      key: 'vision', title: 'Разбор фотографии', status: 'checking',
+      detail: 'показываем модели картинку…',
+    })
+
+    const report = (status: Status, detail: string) =>
+      setPhotoState({ key: 'vision', title: 'Разбор фотографии', status, detail })
+
+    try {
+      const canvas = document.createElement('canvas')
+      canvas.width = 256
+      canvas.height = 256
+
+      const context = canvas.getContext('2d')
+      if (!context) return report('fail', 'браузер не дал нарисовать картинку')
+
+      context.fillStyle = '#ffffff'
+      context.fillRect(0, 0, 256, 256)
+      context.fillStyle = '#e11d48'
+      context.beginPath()
+      context.arc(128, 128, 90, 0, Math.PI * 2)
+      context.fill()
+
+      const base64 = canvas.toDataURL('image/jpeg', 0.9).split(',')[1]
+      const verdict = await verifyPhoto('На снимке должен быть красный круг на белом фоне', base64)
+
+      if (verdict.skipped) {
+        report('warn', verdict.reason
+          ? `проверка не состоялась: ${verdict.reason}`
+          : 'проверка не состоялась — функция ещё не умеет смотреть на снимки, '
+            + 'передеплойте generate-quest')
+        return
+      }
+
+      report(verdict.ok ? 'ok' : 'warn',
+        verdict.ok
+          ? `модель увидела картинку: ${verdict.reason || 'засчитано'}`
+          : `модель посмотрела, но не засчитала: ${verdict.reason}`)
+    } catch (cause) {
+      report('fail', cause instanceof Error ? cause.message : 'не удалось проверить')
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
+
+  const all = [...checks, aiState, photoState].filter(Boolean) as Check[]
 
   return (
     <div className="no-scrollbar h-full overflow-y-auto px-5 pb-10 pt-6">
@@ -362,6 +419,9 @@ export default function Health () {
         <Button variant="ghost" onClick={runChecks}>Проверить заново</Button>
         <Button disabled={aiBusy} onClick={checkAI}>
           {aiBusy ? 'Спрашиваем модель…' : 'Проверить генерацию квеста'}
+        </Button>
+        <Button variant="ghost" disabled={photoBusy} onClick={checkPhotoVision}>
+          {photoBusy ? 'Показываем картинку…' : 'Проверить разбор фотографии'}
         </Button>
         <Link to="/" className="block py-2 text-center text-[16px] text-muted">
           На главную
