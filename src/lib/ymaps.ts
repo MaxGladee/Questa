@@ -96,7 +96,12 @@ export function loadYmaps (): Promise<Ymaps | null> {
  * Переключение — одним словом ниже.
  */
 /** Откуда брать оформление: 'editor' — файл из Редактора, 'simple' — набор ниже. */
-const STYLE_SOURCE: 'editor' | 'simple' = 'simple'
+type StyleSource = 'editor' | 'simple'
+
+// Приведение типом обязательно: без него TypeScript сужает значение до
+// одного варианта и ругается на сравнение ниже как на бессмысленное — а
+// переключатель на то и переключатель, чтобы его меняли руками.
+const STYLE_SOURCE = 'simple' as StyleSource
 
 /**
  * Прополка подписей поверх выбранного оформления.
