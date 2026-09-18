@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { TabScreen } from '../components/Layout'
 import { EventListCard } from '../components/EventCard'
+import {
+  MapFilters, NO_FILTERS, activeFilterCount, matchesFilters, type MapFilterState,
+} from '../components/MapFilters'
 import { Avatar, Progress, useAutofillGuard } from '../components/ui'
 import { Empty, Failed, Loading } from '../components/States'
 import {
@@ -114,6 +117,8 @@ export default function Home () {
   const [query, setQuery] = useState('')
   const [near, setNear] = useState<[number, number] | null>(null)
   const [calendarOpen, setCalendarOpen] = useState(true)
+  const [filters, setFilters] = useState<MapFilterState>(NO_FILTERS)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const guard = useAutofillGuard()
 
   const { data: events, error, loading, reload } = useAsync(
@@ -184,11 +189,30 @@ export default function Home () {
     ;(nearby[key] ??= []).push(event)
   }
 
+  /**
+   * Рекомендации: чужие встречи, куда ещё можно попасть.
+   *
+   * Поиск ищет не только по названию: человек помнит «то, что у Плотинки»
+   * или «настолки», и по названию это не находилось. Отбор — тот же, что
+   * на карте, только без дня (его выбирают календарём) и без расстояния.
+   *
+   * Пока в поиске что-то набрано, день не ограничивает: искать по всему
+   * списку и находить пустоту, потому что встреча послезавтра, — обидно.
+   */
+  const needle = query.trim().toLowerCase()
+
   const recommended = (events ?? []).filter((event) => {
     if (event.status !== 'active' || event.myRole !== 'guest') return false
-    if (!event.title.toLowerCase().includes(query.trim().toLowerCase())) return false
-    return new Date(event.startsAt).toDateString() === chosenDay.toDateString() || query.trim() !== ''
+
+    if (needle && ![event.title, event.description, event.address]
+      .some((text) => text.toLowerCase().includes(needle))) return false
+
+    if (!matchesFilters(event, filters, near)) return false
+
+    return needle !== '' || new Date(event.startsAt).toDateString() === chosenDay.toDateString()
   })
+
+  const chosen = activeFilterCount(filters)
 
   return (
     <TabScreen>
@@ -302,13 +326,52 @@ export default function Home () {
             )}
           </div>
 
+          {/* Отбор такой же, как на карте, и за такой же кнопкой: человек,
+              привыкший к одному экрану, находит его и на другом. */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setFiltersOpen(true)}
+              className={`flex items-center gap-2 rounded-full px-4 py-2 text-[15px] font-semibold
+                          transition ${chosen > 0 ? 'bg-accent text-white' : 'bg-surface text-white'}`}
+            >
+              Фильтры
+              {chosen > 0 && (
+                <span className="grid size-5 place-items-center rounded-full bg-white text-[12px]
+                                 font-bold text-accent">
+                  {chosen}
+                </span>
+              )}
+            </button>
+
+            {chosen > 0 && (
+              <button
+                onClick={() => setFilters(NO_FILTERS)}
+                className="rounded-full bg-surface px-3.5 py-2 text-[14px] text-muted"
+              >
+                Сбросить
+              </button>
+            )}
+          </div>
+
           {loading && <Loading />}
           {error && <Failed message={error} onRetry={reload} />}
           {!loading && !error && recommended.length === 0 && (
-            <Empty label={query ? 'Ничего не нашлось' : 'На этот день чужих ивентов пока нет'} />
+            <Empty label={
+              query ? 'Ничего не нашлось'
+                : chosen > 0 ? 'Под фильтры ничего не подошло — попробуйте снять часть условий'
+                : 'На этот день чужих ивентов пока нет'
+            } />
           )}
           {recommended.map((event) => <EventListCard key={event.id} event={event} />)}
         </section>
+
+        {filtersOpen && (
+          <MapFilters
+            filters={filters} found={recommended.length}
+            rows={near ? ['radius', 'free'] : ['free']}
+            onChange={setFilters} onClose={() => setFiltersOpen(false)}
+          />
+        )}
 
         {/* Когда рядом пусто, список идей полезнее пустого места. */}
         <section className="space-y-3 pb-2">

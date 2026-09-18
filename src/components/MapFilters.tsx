@@ -87,12 +87,18 @@ function Row ({ title, children }: { title: string; children: React.ReactNode })
 }
 
 export function MapFilters (
-  { filters, found, onChange, onClose }: {
+  { filters, found, onChange, onClose, rows = ['when', 'radius', 'free'] }: {
     filters: MapFilterState
     /** Сколько ивентов останется — число на кнопке «Показать». */
     found: number
     onChange: (next: MapFilterState) => void
     onClose: () => void
+    /**
+     * Какие условия показывать, кроме категорий. На главной день выбирают
+     * календарём, а расстояние там не от чего считать — лишние строки
+     * только путали бы.
+     */
+    rows?: ('when' | 'radius' | 'free')[]
   },
 ) {
   useEffect(() => {
@@ -149,6 +155,7 @@ export function MapFilters (
             </div>
           </Row>
 
+          {rows.includes('when') && (
           <Row title="Когда">
             <div className="flex flex-wrap gap-2">
               {WHEN.map(({ value, title }) => (
@@ -162,7 +169,9 @@ export function MapFilters (
               ))}
             </div>
           </Row>
+          )}
 
+          {rows.includes('radius') && (
           <Row title="Как далеко">
             <div className="flex flex-wrap gap-2">
               {RADIUS.map(({ value, title }) => (
@@ -176,7 +185,9 @@ export function MapFilters (
               ))}
             </div>
           </Row>
+          )}
 
+          {rows.includes('free') && (
           <div className="flex items-center gap-3 rounded-card bg-surface-2 p-4">
             <span className="min-w-0 flex-1 text-[17px]">
               Только со свободными местами
@@ -186,6 +197,7 @@ export function MapFilters (
               onChange={(value) => onChange({ ...filters, onlyFree: value })}
             />
           </div>
+          )}
         </div>
 
         <div className="p-5">
