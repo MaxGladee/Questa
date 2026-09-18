@@ -296,7 +296,11 @@ export default function Health () {
       const tasks = Array.isArray(data?.tasks) ? data.tasks.length : 0
 
       if (tasks === 3) {
-        report('ok', 'модель придумала квест: '
+        // Имя модели важнее самих заданий: по нему видно, ответил Claude или
+        // сработала запасная. Функция возвращает его в поле model.
+        const who = typeof data?.model === 'string' ? data.model : 'модель не назвалась'
+
+        report('ok', `${who} · `
           + data.tasks.map((task: { title: string }) => task.title).join(', '))
         return
       }
@@ -362,8 +366,8 @@ export default function Health () {
 
       report(verdict.ok ? 'ok' : 'warn',
         verdict.ok
-          ? `модель увидела картинку: ${verdict.reason || 'засчитано'}`
-          : `модель посмотрела, но не засчитала: ${verdict.reason}`)
+          ? `${verdict.model ?? 'модель'} увидела картинку: ${verdict.reason || 'засчитано'}`
+          : `${verdict.model ?? 'модель'} посмотрела, но не засчитала: ${verdict.reason}`)
     } catch (cause) {
       report('fail', cause instanceof Error ? cause.message : 'не удалось проверить')
     } finally {

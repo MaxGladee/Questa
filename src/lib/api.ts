@@ -1420,6 +1420,8 @@ export interface PhotoVerdict {
   reason: string
   /** Проверка не состоялась: модель недоступна или ещё не умеет этого. */
   skipped: boolean
+  /** Кто смотрел на снимок — видно на странице самопроверки. */
+  model?: string
 }
 
 /**
@@ -1449,7 +1451,12 @@ export async function verifyPhoto (prompt: string, base64: string): Promise<Phot
       return { ok: true, reason: String(data?.error ?? 'Ответ модели не разобран'), skipped: true }
     }
 
-    return { ok: data.ok, reason: String(data.reason ?? ''), skipped: false }
+    return {
+      ok: data.ok,
+      reason: String(data.reason ?? ''),
+      skipped: false,
+      model: typeof data.model === 'string' ? data.model : undefined,
+    }
   } catch (problem) {
     return {
       ok: true,

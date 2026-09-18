@@ -16,9 +16,10 @@
 // («валидация ответа модели» из ТЗ 4.2.6). Если проверка не прошла, клиент
 // берёт шаблон из коллекции — квест у ивента будет в любом случае.
 
-import Anthropic from 'npm:@anthropic-ai/sdk'
-import { z } from 'npm:zod'
-import { zodOutputFormat } from 'npm:@anthropic-ai/sdk/helpers/zod'
+// Версия библиотеки закреплена: в Deno «npm:» без версии тянет свежайшую,
+// и однажды утром квесты могли бы перестать генерироваться из-за чужого
+// обновления. Обновлять — осознанно, поменяв число здесь.
+import Anthropic from 'npm:@anthropic-ai/sdk@0.126.0'
 
 // Ключ Claude задаётся отдельной переменной окружения. Нет ключа — функция
 // работает как раньше, через Gemini: развёртывание можно обновить заранее,
@@ -28,38 +29,73 @@ const CLAUDE_MODEL = Deno.env.get('CLAUDE_MODEL') ?? 'claude-opus-5'
 
 const claude = CLAUDE_KEY ? new Anthropic({ apiKey: CLAUDE_KEY }) : null
 
-// Схема ответа для квеста. Задания названы по именам, а не сложены в
-// массив из трёх: так модель не может перепутать их порядок, а проверка
-// на стороне приложения становится формальностью.
-const QuizQuestion = z.object({
-  question: z.string(),
-  options: z.array(z.string()).length(4),
-  correct_index: z.number().int().min(0).max(3),
-})
+// Схема ответа для квеста (structured outputs).
+//
+// Задания названы по именам, а не сложены в массив из трёх: так модель не
+// может перепутать их порядок, а число вопросов в квизе и диапазон верного
+// ответа проверяет сам провайдер — до того, как ответ дойдёт до нас.
+//
+// Схема описана обычным JSON Schema, без zod: одной зависимостью меньше в
+// функции, которую разворачивают вставкой кода в панель.
+const QUIZ_QUESTION = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['question', 'options', 'correct_index'],
+  properties: {
+    question: { type: 'string' },
+    options: { type: 'array', items: { type: 'string' }, minItems: 4, maxItems: 4 },
+    correct_index: { type: 'integer', minimum: 0, maximum: 3 },
+  },
+}
 
-const QuestShape = z.object({
-  title: z.string(),
-  geo: z.object({
-    title: z.string(),
-    description: z.string(),
-  }),
-  photo: z.object({
-    title: z.string(),
-    description: z.string(),
-    /** Что именно должно быть в кадре — по этому же тексту снимок и проверяется. */
-    prompt: z.string(),
-  }),
-  quiz: z.object({
-    title: z.string(),
-    description: z.string(),
-    questions: z.array(QuizQuestion).length(6),
-  }),
-})
+const QUEST_FORMAT = {
+  type: 'json_schema',
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['title', 'geo', 'photo', 'quiz'],
+    properties: {
+      title: { type: 'string' },
+      geo: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['title', 'description'],
+        properties: { title: { type: 'string' }, description: { type: 'string' } },
+      },
+      photo: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['title', 'description', 'prompt'],
+        properties: {
+          title: { type: 'string' },
+          description: { type: 'string' },
+          // Что именно должно быть в кадре — по этому же тексту снимок и проверяется.
+          prompt: { type: 'string' },
+        },
+      },
+      quiz: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['title', 'description', 'questions'],
+        properties: {
+          title: { type: 'string' },
+          description: { type: 'string' },
+          questions: { type: 'array', items: QUIZ_QUESTION, minItems: 6, maxItems: 6 },
+        },
+      },
+    },
+  },
+}
 
-const PhotoShape = z.object({
-  ok: z.boolean(),
-  reason: z.string(),
-})
+const PHOTO_FORMAT = {
+  type: 'json_schema',
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['ok', 'reason'],
+    properties: { ok: { type: 'boolean' }, reason: { type: 'string' } },
+  },
+}
 
 // Названия моделей у провайдера меняются, и промах по имени неотличим от
 // недоступности. Перебираем варианты по очереди и берём первый, который
@@ -266,6 +302,22 @@ function buildPrompt (ctx: QuestContext): string {
   и тоже про эту встречу, а не «Задание 1».`
 }
 
+/**
+ * Ответ по схеме приходит текстом в первом блоке — разбираем его один раз
+ * для обоих запросов. Схему гарантирует провайдер, поэтому проверяем только
+ * то, что текст вообще пришёл и оказался разбираемым.
+ */
+function readJson (response: { content: Array<{ type: string; text?: string }> }): unknown {
+  const text = response.content.find((block) => block.type === 'text')?.text
+  if (!text) return null
+
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
+}
+
 /** Награды за задания одинаковы у обеих моделей — это правило Системы. */
 const REWARDS = { geolocation: 20, photo: 25, quiz: 30 }
 
@@ -280,16 +332,22 @@ const REWARDS = { geolocation: 20, photo: 25, quiz: 30 }
 async function questWithClaude (ctx: QuestContext) {
   if (!claude) return null
 
-  const response = await claude.messages.parse({
+  const response = await claude.messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 16000,
     system: 'Ты придумываешь квесты для приложения Questa. Отвечай по-русски.',
     messages: [{ role: 'user', content: buildPrompt(ctx) }],
-    output_config: { format: zodOutputFormat(QuestShape) },
+    output_config: { format: QUEST_FORMAT },
   })
 
-  const quest = response.parsed_output
-  if (!quest) return null
+  const quest = readJson(response) as {
+    title: string
+    geo: { title: string; description: string }
+    photo: { title: string; description: string; prompt: string }
+    quiz: { title: string; description: string; questions: unknown[] }
+  } | null
+
+  if (!quest?.geo || !quest?.photo || !quest?.quiz) return null
 
   return {
     title: quest.title,
@@ -326,7 +384,7 @@ async function questWithClaude (ctx: QuestContext) {
 async function photoWithClaude (prompt: string, image: string) {
   if (!claude) return null
 
-  const response = await claude.messages.parse({
+  const response = await claude.messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 4000,
     messages: [{
@@ -338,10 +396,13 @@ async function photoWithClaude (prompt: string, image: string) {
         { type: 'text', text: photoPrompt(prompt) },
       ],
     }],
-    output_config: { format: zodOutputFormat(PhotoShape) },
+    output_config: { format: PHOTO_FORMAT },
   })
 
-  return response.parsed_output ?? null
+  const verdict = readJson(response) as { ok?: unknown; reason?: unknown } | null
+  if (typeof verdict?.ok !== 'boolean') return null
+
+  return { ok: verdict.ok, reason: String(verdict.reason ?? '') }
 }
 
 /** Проверяет ответ модели. Возвращает квест или null, если ответ не годится. */
