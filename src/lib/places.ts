@@ -46,6 +46,22 @@ const KEYWORDS: Record<CategoryCode, string[]> = {
   other: ['парк', 'кафе'],
 }
 
+/** Значок места по его типу — им помечаются заведения на карте. */
+export function placeEmoji (kind: string): string {
+  if (/кафе|кофей/.test(kind)) return '☕'
+  if (/бар|паб/.test(kind)) return '🍸'
+  if (/ресторан/.test(kind)) return '🍽'
+  if (/парк|сад|сквер/.test(kind)) return '🌳'
+  if (/музей|галере/.test(kind)) return '🖼'
+  if (/театр/.test(kind)) return '🎭'
+  if (/кино/.test(kind)) return '🎬'
+  if (/памятник|скульптур/.test(kind)) return '🗿'
+  if (/стадион|спорт|площадк/.test(kind)) return '🏟'
+  if (/библиотек/.test(kind)) return '📚'
+  if (/фонтан|водоём|пруд|река/.test(kind)) return '⛲'
+  return '📍'
+}
+
 /** Тип места из OSM — словом, понятным человеку. */
 const KINDS: Record<string, string> = {
   park: 'парк', garden: 'сад', square: 'площадь', monument: 'памятник',
@@ -71,7 +87,26 @@ const MAX_METERS = 1500
 export async function nearbyPlaces (
   lat: number, lng: number, category: CategoryCode,
 ): Promise<NearbyPlace[]> {
-  const words = KEYWORDS[category] ?? KEYWORDS.other
+  // Модели список уходит в приглашение: восьми точек ей достаточно, а
+  // двадцать только раздували бы запрос.
+  return (await placesAround(lat, lng, KEYWORDS[category] ?? KEYWORDS.other)).slice(0, 8)
+}
+
+/**
+ * Заведения вокруг точки — для слоя «места рядом» на карте.
+ *
+ * Слов немного нарочно: Nominatim просит не частить, а каждое слово — это
+ * отдельный запрос. Трёх хватает, чтобы карта перестала быть пустой между
+ * ивентами.
+ */
+export async function venuesAround (lat: number, lng: number): Promise<NearbyPlace[]> {
+  return placesAround(lat, lng, ['кафе', 'бар', 'парк'], 0)
+}
+
+/** Общий поиск по словам вокруг точки. */
+async function placesAround (
+  lat: number, lng: number, words: string[], minMeters = MIN_METERS,
+): Promise<NearbyPlace[]> {
 
   // Рамка примерно в полтора километра: градус широты — около 111 км,
   // долгота у нас короче на косинус широты.
@@ -108,7 +143,7 @@ export async function nearbyPlaces (
         if (!Number.isFinite(point[0]) || !Number.isFinite(point[1])) continue
 
         const meters = Math.round(distanceMeters([lat, lng], point))
-        if (meters < MIN_METERS || meters > MAX_METERS) continue
+        if (meters < minMeters || meters > MAX_METERS) continue
         if (found.some((other) => other.name === name)) continue
 
         found.push({
@@ -125,5 +160,5 @@ export async function nearbyPlaces (
     }
   }
 
-  return found.sort((a, b) => a.meters - b.meters).slice(0, 8)
+  return found.sort((a, b) => a.meters - b.meters).slice(0, 20)
 }

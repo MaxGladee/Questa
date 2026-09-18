@@ -20,6 +20,7 @@ import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
 import { useToast } from '../components/Toast'
 import { cityCenter } from '../data/cities'
+import { placeEmoji, venuesAround, type NearbyPlace } from '../lib/places'
 
 // Карта на OpenStreetMap. В ТЗ 11.1 указан MapKit Яндекса — он требует
 // платного ключа и заявки, поэтому в прототипе подключён бесплатный источник
@@ -40,6 +41,9 @@ export default function MapScreen () {
   const [filters, setFilters] = useState<MapFilterState>(NO_FILTERS)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [me, setMe] = useState<[number, number] | null>(null)
+  const [venues, setVenues] = useState<NearbyPlace[] | null>(null)
+  const [venue, setVenue] = useState<NearbyPlace | null>(null)
+  const [loadingVenues, setLoadingVenues] = useState(false)
   // К своей точке карту подводим один раз — дальше её двигает человек.
   const centeredOnMe = useRef(false)
   const toast = useToast()
@@ -104,6 +108,65 @@ export default function MapScreen () {
 
     return () => { marker.remove() }
   }, [me, profile?.avatarUrl, profile?.nickname])
+
+  /**
+   * Заведения рядом.
+   *
+   * Между ивентами карта пустая, и непонятно, куда вообще идти. Слой
+   * включается по кнопке, а не сам: поиск идёт через Nominatim, и дёргать
+   * его при каждом движении карты нельзя — он просит не частить.
+   *
+   * Рейтингов у OpenStreetMap нет: их отдают Яндекс и 2ГИС, и обоим нужен
+   * платный ключ. Поэтому карточка места ведёт в Яндекс.Карты, где рейтинг
+   * и отзывы уже есть, — честнее, чем показывать выдуманные звёзды.
+   */
+  async function toggleVenues () {
+    if (venues) {
+      setVenues(null)
+      setVenue(null)
+      return
+    }
+
+    const centre = map.current?.getCenter()
+    if (!centre) return
+
+    setLoadingVenues(true)
+    toast('Ищем места рядом…')
+
+    const found = await venuesAround(centre.lat, centre.lng)
+    setVenues(found)
+    setLoadingVenues(false)
+
+    if (found.length === 0) toast('Рядом ничего не нашлось', 'error')
+  }
+
+  useEffect(() => {
+    const instance = map.current
+    if (!instance || !venues) return
+
+    const layer = L.layerGroup().addTo(instance)
+
+    for (const place of venues) {
+      L.marker([place.lat, place.lng], {
+        icon: L.divIcon({
+          className: '',
+          html: `<span style="display:grid;place-items:center;width:30px;height:30px;
+                              border-radius:999px;background:#1B1235;font-size:15px;
+                              border:1px solid rgba(255,255,255,.18);
+                              box-shadow:0 2px 8px rgb(0 0 0 / .45)">
+                   ${placeEmoji(place.kind)}
+                 </span>`,
+          iconSize: [30, 30],
+          iconAnchor: [15, 15],
+        }),
+        zIndexOffset: -200,
+      })
+        .addTo(layer)
+        .on('click', () => { setVenue(place); setSelected(null) })
+    }
+
+    return () => { layer.remove() }
+  }, [venues])
 
   const shown = events.filter((event) => matchesFilters(event, filters, me))
 
@@ -209,9 +272,20 @@ export default function MapScreen () {
           сторону, и объясняет, если браузер не отдаёт геопозицию.
         */}
         <button
+          onClick={toggleVenues} aria-label="Места рядом"
+          className={`absolute left-4 z-10 flex items-center gap-2 rounded-full px-4 py-2.5
+                      text-[15px] font-semibold shadow-lg transition
+                      ${venue ? 'bottom-[24rem]' : event ? 'bottom-[19.5rem]' : 'bottom-24'}
+                      ${venues ? 'bg-accent text-white' : 'bg-surface text-white'}`}
+        >
+          {loadingVenues ? 'Ищем…' : venues ? 'Скрыть места' : 'Места рядом'}
+        </button>
+
+        <button
           onClick={showMe} aria-label="Моя геолокация"
           className={`absolute right-4 z-10 grid size-12 place-items-center rounded-full
-                      bg-surface shadow-lg transition ${event ? 'bottom-[19.5rem]' : 'bottom-24'}
+                      bg-surface shadow-lg transition
+                      ${venue ? 'bottom-[24rem]' : event ? 'bottom-[19.5rem]' : 'bottom-24'}
                       ${me ? 'text-accent' : 'text-muted'}`}
         >
           <LocateIcon className="size-6" />
@@ -295,6 +369,54 @@ export default function MapScreen () {
                 ? 'Попробуйте снять часть условий — например, расстояние или день.'
                 : 'Никто не создал ивент поблизости. Можно стать первым — идеи есть на главной.'}
             </p>
+          </div>
+        )}
+
+        {/* Карточка заведения. Рейтинг живёт в Яндекс.Картах — туда и ведём. */}
+        {venue && !event && (
+          <div className="absolute inset-x-3 bottom-24 z-10 space-y-3 rounded-card bg-surface
+                          p-3.5 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-surface-2
+                               text-[24px]">
+                {placeEmoji(venue.kind)}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[18px] font-bold">{venue.name}</p>
+                <p className="mt-0.5 text-[14px] text-muted">
+                  {venue.kind} · {formatDistance(venue.meters)} от центра карты
+                </p>
+              </div>
+              <button
+                onClick={() => setVenue(null)} aria-label="Скрыть карточку"
+                className="shrink-0 px-1 text-[20px] leading-none text-muted"
+              >
+                ×
+              </button>
+            </div>
+
+            <p className="text-[14px] leading-snug text-muted">
+              Рейтинг и отзывы — в Яндекс.Картах: у OpenStreetMap их нет, а
+              выдумывать звёзды нельзя.
+            </p>
+
+            <a
+              href={`https://yandex.ru/maps/?mode=search&text=${encodeURIComponent(venue.name)}`
+                + `&ll=${venue.lng},${venue.lat}&z=17`}
+              target="_blank" rel="noreferrer"
+              className="block rounded-[18px] bg-surface-2 py-3 text-center text-[16px] font-semibold"
+            >
+              Открыть в Яндекс.Картах
+            </a>
+
+            <Link
+              to="/create"
+              state={{ place: { address: venue.name, lat: venue.lat, lng: venue.lng } }}
+              className="btn-primary block rounded-[18px] py-3 text-center text-[16px]
+                         font-semibold text-white"
+            >
+              Позвать сюда
+            </Link>
           </div>
         )}
 

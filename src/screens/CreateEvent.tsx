@@ -18,7 +18,10 @@ export default function CreateEvent () {
 
   // Форма могла быть открыта по готовой идее с главной — тогда поля уже
   // заполнены, и пользователю остаётся указать место и время.
-  const { state } = useLocation() as { state?: { idea?: IdeaSuggestion } }
+  // Или по месту с карты — тогда заполнено только место встречи.
+  const { state } = useLocation() as {
+    state?: { idea?: IdeaSuggestion; place?: { address: string; lat: number; lng: number } }
+  }
   const idea = state?.idea
 
   const [title, setTitle] = useState(idea?.title ?? '')
@@ -26,7 +29,7 @@ export default function CreateEvent () {
   // Идея может прийти с местом — тогда форма заполнена целиком, и человеку
   // остаётся выбрать день.
   const [place, setPlace] = useState<{ address: string; lat: number; lng: number } | null>(
-    idea?.place ?? null,
+    idea?.place ?? state?.place ?? null,
   )
   const [pickingPlace, setPickingPlace] = useState(false)
   const { data: left } = useAsync(
