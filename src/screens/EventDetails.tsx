@@ -58,7 +58,7 @@ export default function EventDetails () {
   const full = event.participants.length >= event.maxParticipants
   const started = new Date(event.startsAt).getTime() <= Date.now()
 
-  async function act (action: () => Promise<void>, done?: () => void) {
+  async function act (action: () => Promise<unknown>, done?: () => void) {
     setBusy(true)
     setActionError('')
     try {
@@ -70,6 +70,30 @@ export default function EventDetails () {
     } catch (cause) {
       // Без этого отказ выглядел так, будто кнопка просто не нажалась.
       setActionError(cause instanceof Error ? cause.message : 'Не удалось выполнить действие')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /**
+   * Начало встречи. Итог подбора заданий не прячется: если модель не
+   * ответила, организатор должен об этом знать — иначе он смотрит на
+   * шаблонные задания и думает, что это и есть «сгенерировано ИИ».
+   */
+  const start = async () => {
+    setBusy(true)
+    setActionError('')
+    try {
+      const outcome = await startEvent(event.id, profile!.id)
+
+      if (outcome.source === 'ai') toast('Ивент начался — задания придумал ИИ')
+      else if (outcome.source === 'template') toast('Ивент начался — взяли квест из коллекции')
+      else toast('Ивент начался — оставили прежние задания')
+
+      if (outcome.reason) setActionError(`Модель не ответила: ${outcome.reason}`)
+      reload()
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : 'Не удалось начать ивент')
     } finally {
       setBusy(false)
     }
@@ -230,10 +254,7 @@ export default function EventDetails () {
 
             {/* Пока организатор не начал встречу, заданий нет ни у кого. */}
             {event.myRole === 'organizer' && event.status === 'active' && (
-              <Button disabled={busy} onClick={() => act(
-                () => startEvent(event.id, profile!.id),
-                () => { toast('Ивент начался — задания открыты'); reload() },
-              )}>
+              <Button disabled={busy} onClick={start}>
                 {/* Ожидание честное: в этот момент модель придумывает
                     задания под собравшуюся компанию, это занимает секунды. */}
                 {busy ? 'Придумываем задания…' : 'Начать ивент'}

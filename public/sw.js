@@ -5,16 +5,20 @@
 // приложением и пользуются. С ним оболочка приложения берётся из кэша, а
 // данные подтягиваются, когда связь вернётся.
 //
-// Две разные стратегии, и это принципиально:
+// Три стратегии, и различать их принципиально:
 //   • переходы по страницам и index.html — сначала сеть. Иначе после
 //     очередной выкладки люди неделями сидели бы на старой версии.
-//   • файлы сборки (в их именах есть хэш содержимого) — сначала кэш: их
-//     содержимое никогда не меняется, меняется имя.
+//   • файлы сборки из /assets/ — сначала кэш: в их именах есть хэш
+//     содержимого, оно никогда не меняется, меняется имя.
+//   • всё остальное своё — картинки, иконки, манифест — отдаём из кэша,
+//     но тут же тянем свежее в фоне. Имена у них постоянные, и правило
+//     «сначала кэш» держало бы старую картинку вечно: именно так заменённая
+//     иконка приложения продолжала показываться прежней.
 //
 // Запросы к базе, картам и хранилищу снимков через воркер не проходят:
 // это чужие адреса, и кэшировать ответы с личными данными не следует.
 
-const CACHE = 'questa-v1'
+const CACHE = 'questa-v2'
 
 self.addEventListener('install', (event) => {
   self.skipWaiting()
@@ -56,6 +60,26 @@ async function fromCacheFirst (request) {
   return response
 }
 
+/** Отдаём из кэша сразу, а следом обновляем его свежим ответом. */
+async function fromCacheThenUpdate (request) {
+  const cache = await caches.open(CACHE)
+  const cached = await cache.match(request)
+
+  const fresh = fetch(request)
+    .then((response) => {
+      if (response.ok) cache.put(request, response.clone())
+      return response
+    })
+    .catch(() => null)
+
+  if (cached) return cached
+
+  const response = await fresh
+  if (response) return response
+
+  throw new Error('offline')
+}
+
 self.addEventListener('fetch', (event) => {
   const request = event.request
   if (request.method !== 'GET') return
@@ -68,5 +92,11 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  event.respondWith(fromCacheFirst(request))
+  // Имя файла сборки содержит хэш содержимого — такой файл не меняется.
+  if (url.pathname.includes('/assets/')) {
+    event.respondWith(fromCacheFirst(request))
+    return
+  }
+
+  event.respondWith(fromCacheThenUpdate(request))
 })

@@ -7,7 +7,7 @@ import {
   BackIcon, CameraIcon, ChevronIcon, GeoTaskIcon, PinIcon, QuizIcon, SparkIcon,
 } from '../components/icons'
 import type { QuestTask } from '../data/demo'
-import { checkIn, completeTask, getEvent, getQuest } from '../lib/api'
+import { checkIn, completeTask, getEvent, getQuest, regenerateQuest } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
 import { useCountUp } from '../lib/useCountUp'
@@ -30,11 +30,35 @@ export default function Quest () {
   const [geoTask, setGeoTask] = useState<QuestTask | null>(null)
   const [photoTask, setPhotoTask] = useState<QuestTask | null>(null)
   const [busy, setBusy] = useState(false)
+  const [questNote, setQuestNote] = useState('')
 
   const { data: event } = useAsync(() => getEvent(id!, profile?.id ?? null), [id, profile?.id])
   const { data: state, error, loading, reload } = useAsync(
     () => getQuest(id!, profile?.id ?? null), [id, profile?.id],
   )
+
+  /**
+   * Перепридумать задания. Нужна организатору, когда модель не ответила на
+   * старте и квест достался запасной: переигрывать встречу ради этого никто
+   * не станет, а пока задания никто не выполнил — заменить их можно.
+   */
+  async function regenerate () {
+    if (!profile || !id || busy) return
+
+    setBusy(true)
+    setQuestNote('')
+    try {
+      const outcome = await regenerateQuest(id, profile.id)
+      setQuestNote(outcome.source === 'ai'
+        ? 'Готово: задания придумал ИИ'
+        : `Не вышло: ${outcome.reason ?? 'модель не ответила'}`)
+      reload()
+    } catch (problem) {
+      setQuestNote(problem instanceof Error ? problem.message : 'Не получилось')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const myId = profile?.id ?? ''
   const earned = state?.earned[myId] ?? 0
@@ -188,6 +212,21 @@ export default function Quest () {
             )
           })}
         </section>
+
+        {event?.myRole === 'organizer' && (
+          <div className="space-y-2">
+            <button
+              disabled={busy} onClick={regenerate}
+              className="w-full rounded-card bg-surface-2 py-3 text-center text-[15px]
+                         text-accent-soft disabled:opacity-50"
+            >
+              {busy ? 'Придумываем заново…' : 'Перепридумать задания через ИИ'}
+            </button>
+            {questNote && (
+              <p className="text-center text-[14px] leading-snug text-muted">{questNote}</p>
+            )}
+          </div>
+        )}
 
         <section className="space-y-2">
           <h2 className="text-[24px]">Таблица участников</h2>

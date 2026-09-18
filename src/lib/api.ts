@@ -2,6 +2,7 @@ import { db, isLive } from './supabase'
 import { DEFAULT_CITY, cityCenter } from '../data/cities'
 import { distanceMeters } from './geo'
 import type { Venue } from '../data/venues'
+import { fallbackQuest } from '../data/fallback-quest'
 import {
   EVENTS, MESSAGES, CATEGORIES,
   type CategoryCode, type ChatMessage, type Participant, type Quest, type QuestTask,
@@ -225,16 +226,44 @@ export interface QuestContext {
  * в приложение он не попадает. Ошибка здесь не срывает начало встречи —
  * возвращаем null, и вызывающий код берёт шаблон.
  */
-async function generateQuest (context: QuestContext): Promise<GeneratedTask[] | null> {
+async function generateQuest (
+  context: QuestContext,
+): Promise<{ tasks: GeneratedTask[] } | { reason: string }> {
   try {
     const { data, error } = await db().functions.invoke('generate-quest', {
       body: context,
     })
 
-    if (error || !Array.isArray(data?.tasks) || data.tasks.length !== 3) return null
-    return data.tasks as GeneratedTask[]
+    // Функция отвечает 4xx/5xx с телом — supabase-js кладёт тело в error,
+    // но саму причину прячет за общим «non-2xx status». Достаём её сами:
+    // без неё в приложении видно только «взяли шаблон», и почему — неясно.
+    if (error) {
+      const details = await readFunctionError(error)
+      return { reason: details || error.message }
+    }
+
+    if (data?.error) return { reason: String(data.error) }
+    if (!Array.isArray(data?.tasks) || data.tasks.length !== 3) {
+      return { reason: 'Ответ модели не прошёл проверку' }
+    }
+
+    return { tasks: data.tasks as GeneratedTask[] }
+  } catch (problem) {
+    return { reason: problem instanceof Error ? problem.message : 'Функция недоступна' }
+  }
+}
+
+/** Текст ошибки из ответа функции, если он там есть. */
+async function readFunctionError (error: unknown): Promise<string> {
+  const response = (error as { context?: Response })?.context
+  if (!response || typeof response.text !== 'function') return ''
+
+  try {
+    const body = await response.text()
+    const parsed = JSON.parse(body) as { error?: string; details?: string[] }
+    return [parsed.error, parsed.details?.join('; ')].filter(Boolean).join(' · ')
   } catch {
-    return null
+    return ''
   }
 }
 
@@ -321,10 +350,31 @@ async function saveQuest (
 }
 
 /** Подбор случайного шаблона под категорию ивента (ЧТЗ 5.10). */
-async function buildQuestFromTemplate (
+/**
+ * Запасной квест, когда модель не ответила.
+ *
+ * Раньше он брался из коллекции в базе, и все встречи получали одни и те же
+ * слова — «дойдите до места встречи», «найдите деталь, которую другие не
+ * заметили». Теперь задания собираются из контекста самой встречи: адрес в
+ * гео-задании, предмет по категории в фото-задании, квиз про город.
+ * Коллекция в базе осталась на случай, когда контекст собрать не удалось.
+ */
+async function buildFallbackQuest (
   eventId: string, categoryId: number, context?: QuestContext | null,
 ) {
   const client = db()
+
+  if (context) {
+    const tasks = fallbackQuest({
+      title: context.title,
+      category: context.category,
+      address: context.address,
+      city: context.city,
+    })
+
+    await saveQuest(eventId, 'template', null, tasks as GeneratedTask[])
+    return
+  }
 
   const { data: templates } = await client
     .from('quest_template').select('id').eq('category_id', categoryId)
@@ -338,33 +388,7 @@ async function buildQuestFromTemplate (
 
   if (!tasks?.length) return
 
-  await saveQuest(eventId, 'template', template.id, withPlace(tasks as GeneratedTask[], context))
-}
-
-/**
- * Шаблон говорит «дойдите до точки встречи» — одинаково для всех ивентов.
- * Подставляем в него адрес: запасной квест всё равно останется запасным, но
- * перестанет выглядеть текстом из ниоткуда.
- */
-function withPlace (tasks: GeneratedTask[], context?: QuestContext | null): GeneratedTask[] {
-  const place = context?.address?.trim()
-  if (!place) return tasks
-
-  return tasks.map((task) => {
-    if (task.type === 'geolocation') {
-      return { ...task, description: `${task.description} Ориентир — ${place}.` }
-    }
-
-    if (task.type === 'photo') {
-      const prompt = (task.params as { prompt?: string } | undefined)?.prompt ?? task.description
-      return {
-        ...task,
-        params: { ...(task.params ?? {}), prompt: `${prompt}. Место встречи: ${place}` },
-      }
-    }
-
-    return task
-  })
+  await saveQuest(eventId, 'template', template.id, tasks as GeneratedTask[])
 }
 
 /**
@@ -487,11 +511,13 @@ export async function cancelEvent (
  * объявляется в чате триггером, и к этому моменту задания должны быть на
  * месте — иначе люди откроют пустой квест.
  */
-export async function startEvent (eventId: string, organizerId: string): Promise<void> {
-  if (!isLive) return
+export async function startEvent (
+  eventId: string, organizerId: string,
+): Promise<QuestOutcome> {
+  if (!isLive) return { source: 'ai' }
   const client = db()
 
-  await prepareQuest(eventId)
+  const outcome = await prepareQuest(eventId)
 
   const { error } = await client.from('event')
     .update({ status: 'in_progress' })
@@ -503,6 +529,7 @@ export async function startEvent (eventId: string, organizerId: string): Promise
 
   // Сообщение «Ивент начался» и уведомления участникам ставит триггер:
   // системные сообщения приложению писать нечем — у них нет автора.
+  return outcome
 }
 
 /**
@@ -512,27 +539,84 @@ export async function startEvent (eventId: string, organizerId: string): Promise
  * ответила, лучше оставить то, что есть, чем начать встречу без заданий.
  * Совсем пустому ивенту в этом случае достаётся шаблон из коллекции.
  */
-async function prepareQuest (eventId: string): Promise<void> {
+/**
+ * Перепридумать задания уже начатой встречи (только организатору).
+ *
+ * Нужна, когда модель не ответила на старте и квест достался шаблонный:
+ * переигрывать встречу ради этого никто не будет. Пока никто не выполнил
+ * ни одного задания, заменить их безопасно — после первого выполнения уже
+ * нет: вместе с заданиями исчезли бы и начисленные очки.
+ */
+export async function regenerateQuest (
+  eventId: string, organizerId: string,
+): Promise<QuestOutcome> {
+  if (!isLive) return { source: 'ai' }
+  const client = db()
+
+  const { data: event } = await client
+    .from('event').select('organizer_id').eq('id', eventId).maybeSingle()
+
+  if (event?.organizer_id !== organizerId) throw new Error('Менять задания может только организатор')
+
+  const { data: quest } = await client
+    .from('quest').select('id, task (id)').eq('event_id', eventId).maybeSingle()
+
+  const taskIds = ((quest?.task ?? []) as Row[]).map((task) => task.id)
+
+  if (taskIds.length) {
+    const { count } = await client
+      .from('task_completion').select('id', { count: 'exact', head: true }).in('task_id', taskIds)
+
+    if ((count ?? 0) > 0) {
+      throw new Error('Задания уже выполняют — менять их поздно')
+    }
+  }
+
+  return prepareQuest(eventId)
+}
+
+/** Чем закончился подбор заданий — это видит организатор. */
+export interface QuestOutcome {
+  source: 'ai' | 'template' | 'kept'
+  /** Почему не вышло у модели. Пусто, если вышло. */
+  reason?: string
+}
+
+async function prepareQuest (eventId: string): Promise<QuestOutcome> {
   const client = db()
 
   const { data: existing } = await client
     .from('quest').select('id').eq('event_id', eventId).maybeSingle()
 
   const context = await questContext(eventId)
-  const generated = context ? await generateQuest(context) : null
+  const result = context
+    ? await generateQuest(context)
+    : { reason: 'Не удалось собрать контекст встречи' }
 
-  if (generated) {
-    if (existing) await client.from('quest').delete().eq('id', existing.id)
-    await saveQuest(eventId, 'ai', null, generated)
-    return
+  if ('tasks' in result) {
+    if (existing) {
+      // Удаление может не пройти: право на него даёт файл 005. Тогда старый
+      // квест остаётся — это лучше, чем уронить начало встречи ошибкой
+      // уникальности при попытке записать второй квест тому же ивенту.
+      const { data: removed } = await client
+        .from('quest').delete().eq('id', existing.id).select('id')
+
+      if (!removed?.length) {
+        return { source: 'kept', reason: 'Не хватает прав заменить прежний квест (файл 005)' }
+      }
+    }
+
+    await saveQuest(eventId, 'ai', null, result.tasks)
+    return { source: 'ai' }
   }
 
-  if (existing) return
+  if (existing) return { source: 'kept', reason: result.reason }
 
   const { data: category } = await client
     .from('event').select('category_id').eq('id', eventId).maybeSingle()
 
-  if (category) await buildQuestFromTemplate(eventId, category.category_id, context)
+  if (category) await buildFallbackQuest(eventId, category.category_id, context)
+  return { source: 'template', reason: result.reason }
 }
 
 /**

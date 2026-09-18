@@ -240,13 +240,17 @@ export default function Health () {
           apikey: key,
           authorization: `Bearer ${token ?? key}`,
         },
+        // Контекст настоящий, а не заглушка: проверка должна показывать
+        // то же, что получит живой ивент, — включая город, время и интересы.
         body: JSON.stringify({
           title: 'Проверка связи',
           description: 'Тестовый запрос со страницы самопроверки',
           category: 'chill',
-          address: 'Екатеринбург, Плотинка',
+          city: profile?.city || 'Екатеринбург',
+          address: 'Плотинка, Исторический сквер',
+          startsAt: new Date(Date.now() + 3 * 3_600_000).toISOString(),
           participants: 3,
-          interests: ['coffee'],
+          interests: profile?.interests?.length ? profile.interests : ['coffee', 'walk'],
         }),
       })
 

@@ -113,8 +113,14 @@ export default function CreateEvent () {
           Он появился на карте и в рекомендациях. Квест подберётся к началу встречи.
         </p>
         <div className="mt-4 w-full space-y-3">
-          <Button onClick={() => navigate(`/event/${created}`)}>Открыть ивент</Button>
-          <Button variant="ghost" onClick={() => navigate('/')}>На главную</Button>
+          {/* replace, а не push: иначе «назад» с карточки ивента возвращает
+              в форму создания, будто ивент ещё не создан. */}
+          <Button onClick={() => navigate(`/event/${created}`, { replace: true })}>
+            Открыть ивент
+          </Button>
+          <Button variant="ghost" onClick={() => navigate('/', { replace: true })}>
+            На главную
+          </Button>
         </div>
       </div>
     )
