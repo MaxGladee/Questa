@@ -50,6 +50,15 @@ export default function MapScreen () {
   const centeredOnMe = useRef(false)
   const toast = useToast()
 
+  /**
+   * Карта собирается один раз за жизнь экрана.
+   *
+   * Раньше в зависимостях стоял город, а он приезжает вместе с профилем —
+   * через мгновение после открытия. Экран успевал заказать карту дважды:
+   * первая ещё собиралась, вторая начинала собираться в том же узле, и на
+   * месте карты оставался чёрный прямоугольник. Обновление страницы
+   * «чинило» его потому, что профиль к тому моменту был уже в памяти.
+   */
   useEffect(() => {
     const node = container.current
     if (!node || map.current) return
@@ -60,6 +69,13 @@ export default function MapScreen () {
       if (!alive) return view.destroy()
       map.current = view
       setReady((step) => step + 1)
+
+      // Экран появляется с анимацией, и карта может собраться, пока он ещё
+      // едет: размеры тогда запоминаются неверные, и остаётся чёрный
+      // прямоугольник. Два пересчёта — сразу и через полсекунды — стоят
+      // копейки и снимают вопрос.
+      requestAnimationFrame(() => view.refresh())
+      setTimeout(() => { if (alive) view.refresh() }, 500)
     })
 
     return () => {
@@ -67,7 +83,15 @@ export default function MapScreen () {
       map.current?.destroy()
       map.current = null
     }
-  }, [profile?.city])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Город приезжает с профилем: как только он известен, показываем его —
+  // но только пока человек не увёл карту сам и не нашёлся по геопозиции.
+  useEffect(() => {
+    if (!map.current || centeredOnMe.current || !profile?.city) return
+    map.current.setView(cityCenter(profile.city), 12)
+  }, [profile?.city, ready])
 
   // Своя точка на карте: без неё непонятно, далеко ли до ивентов.
   useEffect(() => {
@@ -272,33 +296,40 @@ export default function MapScreen () {
         </div>
 
         {/*
-          Кнопка «я на карте»: возвращает к своей точке, когда карту увели в
-          сторону, и объясняет, если браузер не отдаёт геопозицию.
+          Всё, что живёт внизу карты, собрано в один столбец: кнопки, а под
+          ними карточка. Раньше каждая кнопка отступала от низа на
+          вычисленную вручную высоту карточки — и стоило карточке стать
+          выше (длинное название, список участников), как кнопки либо
+          подскакивали, либо скрывались под ней. Теперь высоту считает
+          раскладка, а не я.
         */}
-        <button
-          onClick={toggleVenues} aria-label="Места рядом"
-          className={`absolute left-4 z-10 flex items-center gap-2 rounded-full px-4 py-2.5
-                      text-[15px] font-semibold shadow-lg transition
-                      ${venue ? 'bottom-[24rem]' : event ? 'bottom-[19.5rem]' : 'bottom-24'}
-                      ${venues ? 'bg-accent text-white' : 'bg-surface text-white'}`}
-        >
-          {loadingVenues ? 'Ищем…' : venues ? 'Скрыть места' : 'Места рядом'}
-        </button>
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col gap-3
+                        px-3 pb-24">
+          <div className="pointer-events-auto flex items-end justify-between gap-2">
+            <button
+              onClick={toggleVenues} aria-label="Места рядом"
+              className={`flex items-center gap-2 rounded-full px-4 py-2.5 text-[15px]
+                          font-semibold shadow-lg transition ${
+                venues ? 'bg-accent text-white' : 'bg-surface text-white'}`}
+            >
+              {loadingVenues ? 'Ищем…' : venues ? 'Скрыть места' : 'Места рядом'}
+            </button>
 
-        <button
-          onClick={showMe} aria-label="Моя геолокация"
-          className={`absolute right-4 z-10 grid size-12 place-items-center rounded-full
-                      bg-surface shadow-lg transition
-                      ${venue ? 'bottom-[24rem]' : event ? 'bottom-[19.5rem]' : 'bottom-24'}
-                      ${me ? 'text-accent' : 'text-muted'}`}
-        >
-          <LocateIcon className="size-6" />
-        </button>
+            {/* Кнопка «я на карте»: возвращает к своей точке, когда карту
+                увели в сторону, и объясняет, если браузер не отдаёт
+                геопозицию. */}
+            <button
+              onClick={showMe} aria-label="Моя геолокация"
+              className={`grid size-12 shrink-0 place-items-center rounded-full bg-surface
+                          shadow-lg transition ${me ? 'text-accent' : 'text-muted'}`}
+            >
+              <LocateIcon className="size-6" />
+            </button>
+          </div>
 
         {/* Карточка по нажатию на маркер: всё, по чему решают, идти или нет. */}
         {event && (
-          <div className="absolute inset-x-3 bottom-24 z-10 space-y-3 rounded-card bg-surface
-                          p-3.5 shadow-2xl">
+          <div className="pointer-events-auto space-y-3 rounded-card bg-surface p-3.5 shadow-2xl">
             <div className="flex items-start gap-3">
               <Cover
                 src={event.coverUrl} category={event.category}
@@ -362,9 +393,8 @@ export default function MapScreen () {
         )}
 
         {/* Пустая карта без объяснения выглядит как поломка. */}
-        {!event && shown.length === 0 && (
-          <div className="absolute inset-x-4 bottom-24 z-10 rounded-card bg-surface p-4
-                          text-center shadow-2xl">
+        {!event && !venue && shown.length === 0 && (
+          <div className="pointer-events-auto rounded-card bg-surface p-4 text-center shadow-2xl">
             <p className="text-[17px] font-semibold">
               {chosen > 0 ? 'Под фильтры ничего не подошло' : 'Рядом пока пусто'}
             </p>
@@ -378,8 +408,7 @@ export default function MapScreen () {
 
         {/* Карточка заведения. Рейтинг живёт в Яндекс.Картах — туда и ведём. */}
         {venue && !event && (
-          <div className="absolute inset-x-3 bottom-24 z-10 space-y-3 rounded-card bg-surface
-                          p-3.5 shadow-2xl">
+          <div className="pointer-events-auto space-y-3 rounded-card bg-surface p-3.5 shadow-2xl">
             <div className="flex items-start gap-3">
               <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-surface-2
                                text-[24px]">
@@ -418,6 +447,7 @@ export default function MapScreen () {
             </Link>
           </div>
         )}
+        </div>
 
         {filtersOpen && (
           <MapFilters

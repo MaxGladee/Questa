@@ -73,6 +73,8 @@ export default function LocationPicker (
       })
 
       setReady((step) => step + 1)
+      requestAnimationFrame(() => view.refresh())
+      setTimeout(() => { if (alive) view.refresh() }, 500)
     })
 
     return () => {

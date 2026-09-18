@@ -52,6 +52,15 @@ export interface MapView {
   circle (at: LatLng, radiusMeters: number): MapShape
   line (points: LatLng[]): MapShape
   onClick (handler: (at: LatLng) => void): void
+  /**
+   * Пересчитать размер под контейнер.
+   *
+   * Карта запоминает размеры окна в момент сборки. Если в этот момент
+   * экран ещё выезжал анимацией или панель снизу меняла высоту, размеры
+   * запоминаются неверные — и вместо карты остаётся чёрный прямоугольник
+   * до первого движения. Вызов после появления экрана это лечит.
+   */
+  refresh (): void
   destroy (): void
 }
 
@@ -68,6 +77,14 @@ export async function createMapView (
   container: HTMLElement, options: MapOptions,
 ): Promise<MapView> {
   const api = await loadYmaps()
+
+  // Библиотека грузится не мгновенно, и за это время экран мог успеть
+  // пересобраться — тогда в контейнере остаются потроха прошлой карты.
+  // Обе библиотеки на такой контейнер реагируют плохо: Leaflet отказывается
+  // работать со «своим» узлом повторно, а Яндекс рисует поверх мёртвого
+  // слоя чёрный прямоугольник. Поэтому перед сборкой узел очищается.
+  container.innerHTML = ''
+  delete (container as unknown as { _leaflet_id?: number })._leaflet_id
   if (api) {
     try {
       return yandexMap(api, container, options)
@@ -219,6 +236,14 @@ function yandexMap (api: any, container: HTMLElement, options: MapOptions): MapV
       }))
     },
 
+    refresh () {
+      try {
+        map.container?.fitToViewport?.()
+      } catch {
+        // Метод необязательный: в старых сборках библиотеки его нет.
+      }
+    },
+
     destroy () { map.destroy() },
   }
 }
@@ -292,6 +317,8 @@ function osmMap (container: HTMLElement, options: MapOptions): MapView {
         handler([event.latlng.lat, event.latlng.lng])
       })
     },
+
+    refresh () { map.invalidateSize() },
 
     destroy () { map.remove() },
   }

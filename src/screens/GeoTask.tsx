@@ -83,6 +83,8 @@ export default function GeoTask (
       }
 
       setMapReady((step) => step + 1)
+      requestAnimationFrame(() => view.refresh())
+      setTimeout(() => { if (alive) view.refresh() }, 500)
     })
 
     return () => {
