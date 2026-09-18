@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { PlainScreen } from '../components/Layout'
 import { Avatar, Button, Chip, Field } from '../components/ui'
 import { Failed, Loading } from '../components/States'
-import { BackIcon, ChevronIcon, PinIcon, StarIcon } from '../components/icons'
+import { BackIcon, ChevronIcon, FlagIcon, PinIcon, StarIcon } from '../components/icons'
 import { Cover } from '../components/Art'
 import { categoryTitle, formatDate, formatTime } from '../data/demo'
 import {
@@ -78,6 +78,16 @@ export default function EventDetails () {
   return (
     <PlainScreen
       left={<button onClick={() => navigate(-1)} aria-label="Назад"><BackIcon className="size-7" /></button>}
+      right={event.myRole !== 'organizer' ? (
+        // Жалоба стоит отдельно от действий с самим ивентом: рядом с
+        // «покинуть» её слишком легко нажать не глядя.
+        <button
+          onClick={() => setReporting(true)} aria-label="Пожаловаться"
+          className="grid size-10 place-items-center rounded-full bg-surface-2 text-red-400/80"
+        >
+          <FlagIcon className="size-5" />
+        </button>
+      ) : undefined}
     >
       <div className="space-y-4 px-4 pb-8">
         <div className="relative">
@@ -270,15 +280,6 @@ export default function EventDetails () {
           </div>
         )}
 
-        {/* Пожаловаться может любой, кто видит ивент, кроме его организатора. */}
-        {event.myRole !== 'organizer' && (
-          <button
-            onClick={() => setReporting(true)}
-            className="w-full py-2 text-center text-[15px] text-red-400/90"
-          >
-            Пожаловаться
-          </button>
-        )}
       </div>
 
       {reporting && (

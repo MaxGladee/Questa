@@ -151,3 +151,10 @@ export const LocateIcon = ({ className }: IconProps) => (
     <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
   </svg>
 )
+
+export const FlagIcon = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" className={className} {...stroke}>
+    <path d="M6 21V4" />
+    <path d="M6 4.5h10l-2 3.5 2 3.5H6" />
+  </svg>
+)

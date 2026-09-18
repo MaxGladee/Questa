@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { PlainScreen } from '../components/Layout'
 import { Avatar, Chip, Progress } from '../components/ui'
 import { Failed, Loading } from '../components/States'
-import { BackIcon, StarIcon } from '../components/icons'
+import { BackIcon, FlagIcon, StarIcon } from '../components/icons'
 import { ReportSheet } from '../components/ReportSheet'
 import { useToast } from '../components/Toast'
 import { INTERESTS, levelFromExp, levelProgress } from '../data/demo'
@@ -57,6 +57,14 @@ export default function UserProfile () {
     <PlainScreen
       title="Профиль"
       left={<button onClick={() => navigate(-1)} aria-label="Назад"><BackIcon className="size-7" /></button>}
+      right={mine ? undefined : (
+        <button
+          onClick={() => setReporting(true)} aria-label="Пожаловаться"
+          className="grid size-10 place-items-center rounded-full bg-surface-2 text-red-400/80"
+        >
+          <FlagIcon className="size-5" />
+        </button>
+      )}
     >
       <div className="space-y-6 px-5 pb-10 pt-1">
         <header className="flex flex-col items-center text-center">
@@ -104,14 +112,6 @@ export default function UserProfile () {
 
         <p className="text-center text-[15px] text-muted">В Questa с {person.since}</p>
 
-        {!mine && (
-          <button
-            onClick={() => setReporting(true)}
-            className="w-full py-2 text-center text-[15px] text-red-400/90"
-          >
-            Пожаловаться
-          </button>
-        )}
       </div>
 
       {reporting && profile && (

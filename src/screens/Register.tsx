@@ -33,7 +33,7 @@ export default function Register () {
   return (
     <div className="flex h-full flex-col px-6 pb-8">
       <div className="flex flex-1 flex-col items-center justify-center gap-3">
-        <img src={`${import.meta.env.BASE_URL}art/logo.png`} alt="" width={112} height={124} className="w-28" />
+        <img src={`${import.meta.env.BASE_URL}art/logo.png`} alt="" width={512} height={512} className="size-28" />
         <span className="text-[34px] font-extrabold">Questa</span>
       </div>
 

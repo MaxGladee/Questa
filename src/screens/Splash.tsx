@@ -17,8 +17,8 @@ export default function Splash () {
     >
       <img
         src={`${import.meta.env.BASE_URL}art/logo.png`}
-        alt="Questa" width={128} height={142}
-        className="w-32 animate-[pulse_2.5s_ease-in-out_infinite]"
+        alt="Questa" width={512} height={512}
+        className="size-32 animate-[pulse_2.5s_ease-in-out_infinite]"
       />
       <span className="text-[40px] font-extrabold tracking-tight">Questa</span>
     </button>
