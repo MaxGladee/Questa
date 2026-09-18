@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button, Field, PasswordField } from '../components/ui'
 import { useAuth } from '../lib/auth'
-import { takeDestination } from '../App'
+import { takeDestination } from '../lib/destination'
 
 export default function Login () {
   const navigate = useNavigate()

@@ -8,6 +8,7 @@ import { LiveNotifications } from './components/LiveNotifications'
 import { LevelUp } from './components/LevelUp'
 import { AuthProvider, useAuth } from './lib/auth'
 import { runEventMaintenance } from './lib/api'
+import { rememberDestination } from './lib/destination'
 import { isLive } from './lib/supabase'
 import Splash from './screens/Splash'
 import Onboarding from './screens/Onboarding'
@@ -46,6 +47,7 @@ const Summary = lazy(() => import('./screens/Summary'))
 const Archive = lazy(() => import('./screens/Archive'))
 const UserProfile = lazy(() => import('./screens/UserProfile'))
 const Health = lazy(() => import('./screens/Health'))
+const Invite = lazy(() => import('./screens/Invite'))
 
 /**
  * Экраны за входом. Без сессии уводим на приветствие, с сессией но без
@@ -59,8 +61,12 @@ function RequireAuth ({ children }: { children: ReactNode }) {
   if (!ready) return <Loading label="Открываем Questa…" />
 
   if (!session) {
-    // Человек пришёл по ссылке на ивент, но ещё не вошёл. Запоминаем, куда
-    // он шёл: после входа приложение откроет именно этот экран, а не главную.
+    // Человек пришёл по ссылке на встречу, но ещё не вошёл. Показываем
+    // саму встречу, а не экран приветствия: иначе он видит предложение
+    // зарегистрироваться неизвестно куда и закрывает вкладку.
+    if (/^\/event\/[^/]+$/.test(pathname)) return <Invite />
+
+    // Остальные адреса ничего не говорят гостю — для них прежний путь.
     rememberDestination(pathname)
     return <Navigate to="/start" replace />
   }
@@ -69,26 +75,6 @@ function RequireAuth ({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
-const DESTINATION_KEY = 'questa:after-login'
-
-/** Куда вернуть человека после входа, если он шёл по ссылке. */
-export function rememberDestination (path: string) {
-  try {
-    if (path && path !== '/') sessionStorage.setItem(DESTINATION_KEY, path)
-  } catch {
-    // Приватный режим запрещает хранилище: просто откроется главная.
-  }
-}
-
-export function takeDestination (): string | null {
-  try {
-    const path = sessionStorage.getItem(DESTINATION_KEY)
-    if (path) sessionStorage.removeItem(DESTINATION_KEY)
-    return path
-  } catch {
-    return null
-  }
-}
 
 /**
  * Возврат по ссылке из письма о смене пароля.
@@ -149,6 +135,10 @@ function Router () {
       <Route path="/reset"      element={<ResetPassword />} />
       <Route path="/interests"  element={<Interests />} />
       <Route path="/health"     element={<Health />} />
+      {/* Та же карточка, что видит гость по ссылке на встречу. Открыта
+          всем: по ней организатор может посмотреть, как выглядит его
+          приглашение, не выходя из аккаунта. */}
+      <Route path="/invite/:id" element={<Invite />} />
 
       <Route path="/"        element={<RequireAuth><Home /></RequireAuth>} />
       <Route path="/events"  element={<RequireAuth><Events /></RequireAuth>} />

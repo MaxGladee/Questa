@@ -1130,6 +1130,74 @@ export async function fileComplaint (
   if (error) throw error
 }
 
+// ────────────────── приглашение по ссылке (без входа) ──────────────────
+
+/** Что видно по ссылке на встречу тому, кто ещё не вошёл. */
+export interface InviteCard {
+  id: string
+  title: string
+  description: string
+  coverUrl?: string
+  category: CategoryCode
+  address: string
+  startsAt: string
+  status: string
+  taken: number
+  places: number
+  organizer: { nickname: string; avatarUrl?: string }
+}
+
+/**
+ * Карточка встречи для гостя.
+ *
+ * Читается функцией базы (миграция 013), а не таблицей: таблицы закрыты
+ * политиками доступа и правильно делают. Функция отдаёт ровно то, что
+ * отправитель и так написал в приглашении, — название, время, место, кто
+ * зовёт и сколько мест занято.
+ */
+export async function getInviteCard (eventId: string): Promise<InviteCard | null> {
+  if (!isLive) {
+    const demo = EVENTS.find((event) => event.id === eventId)
+    if (!demo) return null
+
+    const host = demo.participants.find((person) => person.role === 'organizer')
+    return {
+      id: demo.id,
+      title: demo.title,
+      description: demo.description,
+      coverUrl: demo.coverUrl,
+      category: demo.category,
+      address: demo.address,
+      startsAt: demo.startsAt,
+      status: demo.status,
+      taken: demo.participants.length,
+      places: demo.maxParticipants,
+      organizer: { nickname: host?.nickname ?? 'Организатор', avatarUrl: host?.avatarUrl },
+    }
+  }
+
+  const { data, error } = await db().rpc('invite_card', { event_id: eventId })
+  if (error || !data) return null
+
+  const row = data as Row
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description ?? '',
+    coverUrl: row.cover_url ?? undefined,
+    category: (row.category ?? 'other') as CategoryCode,
+    address: row.address,
+    startsAt: row.starts_at,
+    status: row.status,
+    taken: Number(row.taken ?? 0),
+    places: Number(row.places ?? 0),
+    organizer: {
+      nickname: row.organizer?.nickname ?? 'Организатор',
+      avatarUrl: row.organizer?.avatar_url ?? undefined,
+    },
+  }
+}
+
 // ─────────────────── итоги ивента и взаимные оценки ───────────────────
 
 /** Оценки, которые текущий пользователь уже поставил на этом ивенте. */
