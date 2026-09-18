@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Suspense, lazy, useEffect } from 'react'
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { PhoneFrame } from './components/Layout'
+import { Boundary } from './components/Boundary'
 import { Loading } from './components/States'
 import { ToastProvider } from './components/Toast'
 import { LiveNotifications } from './components/LiveNotifications'
@@ -38,16 +39,39 @@ import Notifications from './screens/Notifications'
  * Главная, список ивентов, профиль и вход остаются в основном файле —
  * с них начинают, и ждать отдельной загрузки там нечего.
  */
-const MapScreen = lazy(() => import('./screens/MapScreen'))
-const CreateEvent = lazy(() => import('./screens/CreateEvent'))
-const EditEvent = lazy(() => import('./screens/EditEvent'))
-const Quest = lazy(() => import('./screens/Quest'))
-const Chat = lazy(() => import('./screens/Chat'))
-const Summary = lazy(() => import('./screens/Summary'))
-const Archive = lazy(() => import('./screens/Archive'))
-const UserProfile = lazy(() => import('./screens/UserProfile'))
-const Health = lazy(() => import('./screens/Health'))
-const Invite = lazy(() => import('./screens/Invite'))
+/**
+ * Отложенный экран с повторной попыткой.
+ *
+ * Файл экрана — обычный запрос по сети, и он может не дойти: метро, слабый
+ * вай-фай, а чаще всего — свежая выкладка, после которой старые файлы с
+ * прежними именами уже убраны. Неудачная загрузка роняет отрисовку целиком,
+ * и человек видит чёрный экран вместо заданий или карты.
+ *
+ * Поэтому: сначала вторая попытка через полсекунды — она спасает от
+ * случайного обрыва. Если и она не прошла, дело почти наверняка в
+ * обновлении, и страница перезагружается сама: так человек получит новую
+ * версию вместо объяснений, почему старая больше не работает.
+ */
+function screen (load: () => Promise<{ default: React.ComponentType }>) {
+  return lazy(() => load().catch(() => new Promise<{ default: React.ComponentType }>(
+    (resolve, reject) => setTimeout(() => load().then(resolve, reject), 500),
+  )).catch(() => {
+    window.location.reload()
+    // Пока страница перезагружается, экран остаётся в состоянии загрузки.
+    return new Promise<{ default: React.ComponentType }>(() => {})
+  }))
+}
+
+const MapScreen = screen(() => import('./screens/MapScreen'))
+const CreateEvent = screen(() => import('./screens/CreateEvent'))
+const EditEvent = screen(() => import('./screens/EditEvent'))
+const Quest = screen(() => import('./screens/Quest'))
+const Chat = screen(() => import('./screens/Chat'))
+const Summary = screen(() => import('./screens/Summary'))
+const Archive = screen(() => import('./screens/Archive'))
+const UserProfile = screen(() => import('./screens/UserProfile'))
+const Health = screen(() => import('./screens/Health'))
+const Invite = screen(() => import('./screens/Invite'))
 
 /**
  * Экраны за входом. Без сессии уводим на приветствие, с сессией но без
@@ -124,6 +148,7 @@ function Router () {
     {/* Пока отложенный экран догружается, на месте него — та же полоса
         загрузки, что и при запросе данных: пустой экран выглядел бы
         поломкой. */}
+    <Boundary>
     <Suspense fallback={<Loading label="Открываем…" />}>
     <Routes>
       <Route path="/start"      element={<Splash />} />
@@ -159,6 +184,7 @@ function Router () {
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
     </Suspense>
+    </Boundary>
     </div>
     </>
   )

@@ -306,7 +306,13 @@ export default function EventDetails () {
         ) : (
           <div className="space-y-3">
             {event.status === 'in_progress' && (
-              <Button onClick={() => navigate(`/event/${event.id}/quest`)}>
+              <Button
+                // Экран заданий грузится отдельным файлом вместе с картой:
+                // начинаем тянуть его заранее, как только палец коснулся
+                // кнопки, — к переходу он обычно уже на месте.
+                onPointerDown={() => { void import('./Quest') }}
+                onClick={() => navigate(`/event/${event.id}/quest`)}
+              >
                 Перейти к заданиям
               </Button>
             )}

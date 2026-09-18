@@ -18,7 +18,7 @@
 // Запросы к базе, картам и хранилищу снимков через воркер не проходят:
 // это чужие адреса, и кэшировать ответы с личными данными не следует.
 
-const CACHE = 'questa-v2'
+const CACHE = 'questa-v3'
 
 self.addEventListener('install', (event) => {
   self.skipWaiting()
@@ -55,6 +55,9 @@ async function fromCacheFirst (request) {
   const cached = await cache.match(request)
   if (cached) return cached
 
+  // Файла нет в кэше — идём в сеть. Неудачный ответ (404 после выкладки,
+  // обрыв связи) не кэшируем: иначе поломка застряла бы в кэше насовсем, и
+  // экран, который её ждёт, не открылся бы уже никогда.
   const response = await fetch(request)
   if (response.ok) cache.put(request, response.clone())
   return response
