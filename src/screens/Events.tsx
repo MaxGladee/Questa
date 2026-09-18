@@ -2,11 +2,18 @@ import { Link } from 'react-router-dom'
 import { TabScreen } from '../components/Layout'
 import { EventListCard } from '../components/EventCard'
 import { Empty, Failed, Loading } from '../components/States'
+import type { QuestaEvent } from '../data/demo'
 import { useAuth } from '../lib/auth'
 import { listEvents } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
 
-/** Свои ивенты: те, где пользователь организатор или участник. */
+/**
+ * Свои ивенты: те, где пользователь организатор или участник.
+ *
+ * Список разделён по состоянию встречи. Одной лентой он читался плохо:
+ * идущая прямо сейчас встреча терялась среди прошлогодних, а прошедшие
+ * мешали увидеть ближайшие планы. Порядок разделов — по срочности.
+ */
 export default function Events () {
   const { profile } = useAuth()
   const { data, error, loading, reload } = useAsync(
@@ -14,6 +21,25 @@ export default function Events () {
   )
 
   const mine = (data ?? []).filter((event) => event.myRole !== 'guest')
+
+  const groups: { title: string; events: QuestaEvent[] }[] = [
+    {
+      title: 'Идут сейчас',
+      events: mine.filter((event) => event.status === 'in_progress'),
+    },
+    {
+      title: 'Скоро',
+      events: mine
+        .filter((event) => event.status === 'active')
+        .sort((a, b) => a.startsAt.localeCompare(b.startsAt)),
+    },
+    {
+      title: 'Прошедшие',
+      events: mine
+        .filter((event) => event.status === 'finished' || event.status === 'cancelled')
+        .sort((a, b) => b.startsAt.localeCompare(a.startsAt)),
+    },
+  ].filter((group) => group.events.length > 0)
 
   return (
     <TabScreen>
@@ -34,9 +60,14 @@ export default function Events () {
           <Empty label="Вы пока никуда не записались. Создайте свой ивент или загляните в рекомендации." />
         )}
 
-        <div className="space-y-3">
-          {mine.map((event) => <EventListCard key={event.id} event={event} />)}
-        </div>
+        {groups.map((group) => (
+          <section key={group.title} className="space-y-3">
+            <h2 className="text-[17px] text-muted">
+              {group.title} · {group.events.length}
+            </h2>
+            {group.events.map((event) => <EventListCard key={event.id} event={event} />)}
+          </section>
+        ))}
       </div>
     </TabScreen>
   )

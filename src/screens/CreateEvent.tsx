@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { Button, Field, TextArea } from '../components/ui'
 import { CalendarIcon, CameraIcon, ClockIcon, CloseIcon, PinIcon } from '../components/icons'
 import LocationPicker from './LocationPicker'
-import { CATEGORIES, type CategoryCode } from '../data/demo'
+import { CATEGORIES, formatWhen, type CategoryCode } from '../data/demo'
 import type { Idea } from '../data/ideas'
 import {
   WEEKLY_EVENT_LIMIT, WEEKLY_LIMIT_ENABLED, createEvent, eventsLeftThisWeek, uploadImage,
@@ -117,6 +117,11 @@ export default function CreateEvent () {
     )
   }
 
+  // Дата и время в понятном виде: «в пятницу, 19 сентября, в 20:00».
+  const when = date && time ? new Date(`${date}T${time}`) : null
+  const past = when !== null && when.getTime() <= Date.now()
+  const whenLabel = when ? formatWhen(when) : ''
+
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-t-[28px] bg-surface">
       <div className="pt-3">
@@ -205,7 +210,7 @@ export default function CreateEvent () {
             <label className="flex items-center gap-2 rounded-field bg-field px-4">
               <CalendarIcon className="size-5 shrink-0 text-muted" />
               <input
-                type="date" value={date} onChange={(e) => setDate(e.target.value)}
+                type="date" lang="ru" value={date} onChange={(e) => setDate(e.target.value)}
                 aria-label="Дата"
                 className="w-full bg-transparent py-4 text-[17px] outline-none"
               />
@@ -213,12 +218,26 @@ export default function CreateEvent () {
             <label className="flex items-center gap-2 rounded-field bg-field px-4">
               <ClockIcon className="size-5 shrink-0 text-muted" />
               <input
-                type="time" value={time} onChange={(e) => setTime(e.target.value)}
+                type="time" lang="ru" value={time} onChange={(e) => setTime(e.target.value)}
                 aria-label="Время"
                 className="w-full bg-transparent py-4 text-[17px] outline-none"
               />
             </label>
           </div>
+
+          {/*
+            Поля даты и времени рисует сам браузер, и порядок чисел в них
+            зависит от его языка: где-то 18.09, где-то 09/18. Подпись под
+            ними читается одинаково везде — и сразу видно, если выбрано
+            время, которое уже прошло.
+          */}
+          {when && (
+            <p className={`text-[15px] leading-snug ${past ? 'text-red-400' : 'text-muted'}`}>
+              {past
+                ? 'Это время уже прошло — выберите будущее'
+                : `Встреча начнётся ${whenLabel}`}
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">

@@ -326,3 +326,19 @@ export function formatDate (iso: string): string {
 export function formatTime (iso: string): string {
   return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
 }
+
+// Дни недели в винительном падеже: «в субботу», а не «в суббота».
+// Встроенное форматирование даёт только именительный, и после предлога
+// получается школьная ошибка прямо в интерфейсе.
+const WEEKDAY_ON = [
+  'в воскресенье', 'в понедельник', 'во вторник', 'в среду',
+  'в четверг', 'в пятницу', 'в субботу',
+]
+
+/** «в субботу, 19 сентября, в 20:00» — для подписи выбранного времени. */
+export function formatWhen (date: Date): string {
+  const day = date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+  const time = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+
+  return `${WEEKDAY_ON[date.getDay()]}, ${day}, в ${time}`
+}

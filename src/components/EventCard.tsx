@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { CalendarIcon, ChevronIcon, PinIcon } from './icons'
+import { CalendarIcon, ChevronIcon, PinIcon, UserIcon } from './icons'
 import { Cover } from './Art'
 import { formatDate, formatTime, type EventStatus, type QuestaEvent } from '../data/demo'
 
@@ -51,6 +51,12 @@ export function EventListCard ({ event }: { event: QuestaEvent }) {
         <span className="flex items-center gap-2 rounded-xl bg-chip px-3 py-1.5 text-[14px]">
           <PinIcon className="size-4" />
           {event.address}
+        </span>
+        {/* Сколько мест занято — по этому решают, успеют ли записаться. */}
+        <span className="flex items-center gap-2 rounded-xl bg-chip px-3 py-1.5 text-[14px]">
+          <UserIcon className="size-4" />
+          {event.participants.length} из {event.maxParticipants}
+          {event.myRole === 'organizer' ? ' · вы организатор' : ''}
         </span>
       </div>
     </Link>

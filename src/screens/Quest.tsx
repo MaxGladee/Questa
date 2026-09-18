@@ -158,7 +158,9 @@ export default function Quest () {
                 <Icon className="size-8 shrink-0" />
                 <div className="min-w-0 flex-1">
                   <p className="text-[20px] font-bold">{task.title}</p>
-                  <p className="truncate text-[16px] text-white/85">{task.description}</p>
+                  <p className="line-clamp-2 text-[16px] leading-snug text-white/85">
+                    {task.description}
+                  </p>
                 </div>
                 <div className="shrink-0 text-right">
                   {/*
