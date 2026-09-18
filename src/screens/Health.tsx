@@ -157,6 +157,7 @@ export default function Health () {
       { key: '007_achievements', title: '007 — даты получения ачивок' },
       { key: '008_event_ending', title: '008 — завершение ивента и напоминания' },
       { key: '009_more_categories', title: '009 — новые категории встреч' },
+      { key: '010_event_edits', title: '010 — правки ивента и напоминания' },
     ]
 
     try {

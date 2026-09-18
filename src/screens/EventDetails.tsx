@@ -330,6 +330,18 @@ export default function EventDetails () {
               </button>
             )}
 
+            {/* Пока встреча не началась, её можно поправить: перенести,
+                сменить место, дописать описание. Раньше для этого
+                оставалась только отмена. */}
+            {event.myRole === 'organizer' && event.status === 'active' && !started && (
+              <Button
+                variant="ghost" disabled={busy}
+                onClick={() => navigate(`/event/${event.id}/edit`)}
+              >
+                Изменить ивент
+              </Button>
+            )}
+
             {/* До начала ивент отменяют, после — завершают (ЧТЗ 5.13).
                 Кнопка меняется по времени начала, а не отказывает при нажатии. */}
             {event.myRole === 'organizer' && event.status === 'active' && !started && (

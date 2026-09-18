@@ -481,6 +481,79 @@ export async function leaveEvent (eventId: string, userId: string): Promise<void
   if (error) throw error
 }
 
+/** Что организатор может поменять в уже созданной встрече. */
+export interface EventEdit {
+  title: string
+  description: string
+  address: string
+  lat: number
+  lng: number
+  startsAt: string
+  minParticipants: number
+  maxParticipants: number
+  category: CategoryCode
+  coverUrl?: string
+}
+
+/**
+ * Правка встречи до её начала.
+ *
+ * Раньше единственным способом что-то изменить была отмена: заболел,
+ * закрылось заведение, договорились на час позже — и приходилось собирать
+ * людей заново. Теперь встречу можно поправить, а о правках база сама
+ * расскажет участникам (миграция 010) и переставит напоминания.
+ *
+ * Проверки те же, что при создании, плюс одна своя: мест не может стать
+ * меньше, чем людей уже записалось, — иначе кто-то оказался бы лишним
+ * задним числом.
+ */
+export async function updateEvent (
+  eventId: string, organizerId: string, input: EventEdit,
+): Promise<void> {
+  if (!isLive) return
+  const client = db()
+
+  const { data: event } = await client
+    .from('event')
+    .select('status, starts_at, organizer_id, event_participant (user_id)')
+    .eq('id', eventId).maybeSingle()
+
+  if (!event) throw new Error('Ивент не найден')
+  if (event.organizer_id !== organizerId) throw new Error('Менять встречу может только организатор')
+  if (event.status !== 'active') throw new Error('Начатую или завершённую встречу менять поздно')
+
+  const joined = (event.event_participant ?? []).length
+  if (input.maxParticipants < joined) {
+    throw new Error(`Уже записались ${joined} человек — меньше мест поставить нельзя`)
+  }
+
+  const starts = new Date(input.startsAt).getTime()
+  if (starts < Date.now() + 30 * 60_000) {
+    throw new Error('Ивент должен начинаться не раньше чем через 30 минут')
+  }
+  if (starts > Date.now() + 7 * 86_400_000) {
+    throw new Error('Ивент нельзя назначить дальше чем на неделю вперёд')
+  }
+
+  const { data: category } = await client
+    .from('interest').select('id').eq('code', input.category).maybeSingle()
+
+  const { error } = await client.from('event').update({
+    title: input.title,
+    description: input.description || null,
+    address: input.address,
+    lat: input.lat,
+    lng: input.lng,
+    starts_at: input.startsAt,
+    min_participants: input.minParticipants,
+    max_participants: input.maxParticipants,
+    ...(category ? { category_id: category.id } : {}),
+    ...(input.coverUrl ? { cover_url: input.coverUrl } : {}),
+  }).eq('id', eventId).eq('organizer_id', organizerId).eq('status', 'active')
+
+  if (error) throw error
+}
+
 /**
  * Отмена ивента организатором (ЧТЗ 5.13, триггер 3). Возможна только до
  * начала: после него ивент уже не отменяют, а завершают, иначе у людей

@@ -347,10 +347,14 @@ export const EVENTS: QuestaEvent[] = [
     minParticipants: 2, maxParticipants: 6,
     status: 'active',
     qpReward: 120,
-    myRole: 'guest',
+    // Одна встреча в наборе — своя: без неё в демонстрационном режиме не
+    // показать то, что доступно только организатору, — правку, отмену и
+    // запуск. Чужая встреча для примера тоже есть, это «Игра в DND».
+    myRole: 'organizer',
     chatOpened: false,
     participants: [
-      { id: 'u10', nickname: 'Ирина', role: 'organizer', qpEarned: 0, checkedIn: false },
+      { id: 'me', nickname: 'Елена', role: 'organizer', qpEarned: 0, checkedIn: false },
+      { id: 'u10', nickname: 'Ирина', role: 'participant', qpEarned: 0, checkedIn: false },
     ],
   },
 ]

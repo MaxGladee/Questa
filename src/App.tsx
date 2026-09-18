@@ -28,6 +28,7 @@ import Summary from './screens/Summary'
 import UserProfile from './screens/UserProfile'
 import Archive from './screens/Archive'
 import CreateEvent from './screens/CreateEvent'
+import EditEvent from './screens/EditEvent'
 import Settings from './screens/Settings'
 import Notifications from './screens/Notifications'
 import Health from './screens/Health'
@@ -139,6 +140,7 @@ function Router () {
       <Route path="/notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
 
       <Route path="/create"          element={<RequireAuth><CreateEvent /></RequireAuth>} />
+      <Route path="/event/:id/edit"  element={<RequireAuth><EditEvent /></RequireAuth>} />
       <Route path="/event/:id"       element={<RequireAuth><EventDetails /></RequireAuth>} />
       <Route path="/event/:id/chat"  element={<RequireAuth><Chat /></RequireAuth>} />
       <Route path="/event/:id/quest" element={<RequireAuth><Quest /></RequireAuth>} />
