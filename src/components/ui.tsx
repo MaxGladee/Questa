@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes, TextareaHTMLAttributes } from 'react'
 import { parseAvatarSeed } from './avatar-art'
 import { GeneratedAvatar } from './GeneratedAvatar'
+import { EyeIcon, EyeOffIcon } from './icons'
 
 const cx = (...parts: (string | false | undefined)[]) => parts.filter(Boolean).join(' ')
 
@@ -77,6 +78,35 @@ export function Field ({ className, ...rest }: InputHTMLAttributes<HTMLInputElem
         className,
       )}
     />
+  )
+}
+
+/**
+ * Поле пароля с кнопкой «показать».
+ *
+ * На телефоне пароль набирают одним пальцем и вслепую, а опечатку видно
+ * только по отказу входа. Глазок рядом с полем снимает половину неудачных
+ * попыток и стоит одну кнопку.
+ */
+export function PasswordField (
+  { className, ...rest }: InputHTMLAttributes<HTMLInputElement>,
+) {
+  const [shown, setShown] = useState(false)
+
+  return (
+    <div className="relative">
+      <Field
+        {...rest} type={shown ? 'text' : 'password'}
+        className={cx('pr-14', className)}
+      />
+      <button
+        type="button" onClick={() => setShown((value) => !value)}
+        aria-label={shown ? 'Скрыть пароль' : 'Показать пароль'}
+        className="absolute inset-y-0 right-0 grid w-14 place-items-center text-muted"
+      >
+        {shown ? <EyeOffIcon className="size-5" /> : <EyeIcon className="size-5" />}
+      </button>
+    </div>
   )
 }
 

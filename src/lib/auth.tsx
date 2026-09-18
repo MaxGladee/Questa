@@ -18,6 +18,10 @@ interface AuthValue {
   createProfile: (input: ProfileInput) => Promise<void>
   updateProfile: (input: ProfileInput) => Promise<void>
   changePassword: (current: string, next: string) => Promise<void>
+  /** Письмо со ссылкой на смену пароля (ЧТЗ 5.1.2). */
+  sendPasswordReset: (email: string) => Promise<void>
+  /** Новый пароль по ссылке из письма — текущий при этом не спрашивается. */
+  setNewPassword: (password: string) => Promise<void>
   /** Удаление аккаунта. purged=false — стереть совсем не вышло, аккаунт отключён. */
   deleteAccount: () => Promise<{ purged: boolean }>
   refreshProfile: () => Promise<void>
@@ -241,6 +245,24 @@ export function AuthProvider ({ children }: { children: ReactNode }) {
      * из приложения; окончательное стирание данных происходит на стороне
      * сервера в срок до 30 дней, как требует ТЗ 4.1.5.
      */
+    /**
+     * Ссылка из письма приводит человека обратно в приложение уже с
+     * действующей сессией, поэтому возвращаемся на его же адрес с пометкой
+     * recovery: по ней приложение открывает экран смены пароля.
+     */
+    async sendPasswordReset (email) {
+      const back = `${window.location.origin}${import.meta.env.BASE_URL}?recovery=1`
+      const { error } = await db().auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: back,
+      })
+      if (error) throw error
+    },
+
+    async setNewPassword (password) {
+      const { error } = await db().auth.updateUser({ password })
+      if (error) throw error
+    },
+
     async deleteAccount () {
       const client = db()
       if (!profile) return { purged: true }

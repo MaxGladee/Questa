@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Button, Field } from '../components/ui'
+import { Button, Field, PasswordField } from '../components/ui'
 import { useAuth } from '../lib/auth'
 
 export default function Register () {
@@ -44,12 +44,12 @@ export default function Register () {
           type="email" inputMode="email" autoComplete="email" placeholder="E-mail"
           value={email} onChange={(e) => { setEmail(e.target.value); setError('') }}
         />
-        <Field
-          type="password" autoComplete="new-password" placeholder="Пароль"
+        <PasswordField
+          autoComplete="new-password" placeholder="Пароль"
           value={password} onChange={(e) => { setPassword(e.target.value); setError('') }}
         />
-        <Field
-          type="password" autoComplete="new-password" placeholder="Повторите пароль"
+        <PasswordField
+          autoComplete="new-password" placeholder="Повторите пароль"
           value={repeat} onChange={(e) => { setRepeat(e.target.value); setError('') }}
         />
 

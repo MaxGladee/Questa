@@ -74,7 +74,6 @@ export default function Home () {
   const { profile } = useAuth()
   const [day, setDay] = useState(0)
   const [query, setQuery] = useState('')
-  const [ideaSeed, setIdeaSeed] = useState(0)
   const [near, setNear] = useState<[number, number] | null>(null)
   const guard = useAutofillGuard()
 
@@ -107,8 +106,8 @@ export default function Home () {
   // Идеи пересобираются, когда меняется время суток, город или положение —
   // и по кнопке «другие». Внутри часа список не скачет под руками.
   const ideas = useMemo(
-    () => ideasForNow({ seed: ideaSeed, city: profile?.city, near }),
-    [ideaSeed, profile?.city, near],
+    () => ideasForNow({ city: profile?.city, near }),
+    [profile?.city, near],
   )
 
   // Спрашиваем положение только если доступ уже разрешён: всплывающий
@@ -251,15 +250,7 @@ export default function Home () {
 
         {/* Когда рядом пусто, список идей полезнее пустого места. */}
         <section className="space-y-3 pb-2">
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 className="text-[24px]">Идеи для встречи</h2>
-            <button
-              onClick={() => setIdeaSeed((value) => value + 1)}
-              className="shrink-0 text-[15px] font-semibold text-accent-soft"
-            >
-              Другие
-            </button>
-          </div>
+          <h2 className="text-[24px]">Идеи для встречи</h2>
           <p className="-mt-1 text-[15px] leading-snug text-muted">
             Подборка меняется в течение дня. Нажмите — и форма создания заполнится сама.
           </p>

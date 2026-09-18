@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PlainScreen } from '../components/Layout'
-import { Button, Field, Switch } from '../components/ui'
+import { Button, PasswordField, Switch } from '../components/ui'
 import { AvatarPicker, NicknameField } from '../components/ProfileFields'
 import { InterestsField, CityField } from '../components/ProfilePickers'
 import { Loading } from '../components/States'
@@ -173,12 +173,12 @@ export default function Settings () {
         </Section>
 
         <Section title="Пароль">
-          <Field
-            type="password" autoComplete="current-password" placeholder="Текущий пароль"
+          <PasswordField
+            autoComplete="current-password" placeholder="Текущий пароль"
             value={current} onChange={(e) => { setCurrent(e.target.value); setPasswordNote('') }}
           />
-          <Field
-            type="password" autoComplete="new-password" placeholder="Новый пароль"
+          <PasswordField
+            autoComplete="new-password" placeholder="Новый пароль"
             value={next} onChange={(e) => { setNext(e.target.value); setPasswordNote('') }}
           />
 

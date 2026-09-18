@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
-import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { useEffect } from 'react'
+import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { PhoneFrame } from './components/Layout'
 import { Loading } from './components/States'
 import { ToastProvider } from './components/Toast'
@@ -11,6 +12,8 @@ import Register from './screens/Register'
 import Confirm from './screens/Confirm'
 import Interests from './screens/Interests'
 import Login from './screens/Login'
+import Forgot from './screens/Forgot'
+import ResetPassword from './screens/ResetPassword'
 import Home from './screens/Home'
 import Events from './screens/Events'
 import MapScreen from './screens/MapScreen'
@@ -42,8 +45,28 @@ function RequireAuth ({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+/**
+ * Возврат по ссылке из письма о смене пароля.
+ *
+ * Ссылка ведёт на адрес приложения с пометкой recovery: к этому моменту
+ * Supabase уже разобрал адрес и открыл сессию, а приложению остаётся
+ * увести человека на экран нового пароля и убрать пометку, чтобы
+ * следующее открытие не начиналось с неё.
+ */
+function useRecoveryLink () {
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has('recovery')) return
+
+    window.history.replaceState({}, '', window.location.pathname + window.location.hash)
+    navigate('/reset', { replace: true })
+  }, [navigate])
+}
+
 function Router () {
   const { pathname } = useLocation()
+  useRecoveryLink()
 
   // key по адресу заставляет React пересоздать обёртку при переходе,
   // и анимация появления проигрывается заново на каждом экране.
@@ -55,6 +78,8 @@ function Router () {
       <Route path="/register"   element={<Register />} />
       <Route path="/confirm"    element={<Confirm />} />
       <Route path="/login"      element={<Login />} />
+      <Route path="/forgot"     element={<Forgot />} />
+      <Route path="/reset"      element={<ResetPassword />} />
       <Route path="/interests"  element={<Interests />} />
       <Route path="/health"     element={<Health />} />
 
