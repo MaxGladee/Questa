@@ -96,7 +96,7 @@ export function loadYmaps (): Promise<Ymaps | null> {
  * Переключение — одним словом ниже.
  */
 /** Откуда брать оформление: 'editor' — файл из Редактора, 'simple' — набор ниже. */
-const STYLE_SOURCE: 'editor' | 'simple' = 'editor'
+const STYLE_SOURCE: 'editor' | 'simple' = 'simple'
 
 /**
  * Прополка подписей поверх выбранного оформления.
