@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useEffect } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { PhoneFrame } from './components/Layout'
 import { Loading } from './components/States'
@@ -19,19 +19,33 @@ import Forgot from './screens/Forgot'
 import ResetPassword from './screens/ResetPassword'
 import Home from './screens/Home'
 import Events from './screens/Events'
-import MapScreen from './screens/MapScreen'
 import Profile from './screens/Profile'
 import EventDetails from './screens/EventDetails'
-import Chat from './screens/Chat'
-import Quest from './screens/Quest'
-import Summary from './screens/Summary'
-import UserProfile from './screens/UserProfile'
-import Archive from './screens/Archive'
-import CreateEvent from './screens/CreateEvent'
-import EditEvent from './screens/EditEvent'
 import Settings from './screens/Settings'
 import Notifications from './screens/Notifications'
-import Health from './screens/Health'
+
+/**
+ * Экраны, которые грузятся отдельно.
+ *
+ * Всё приложение собиралось в один файл на мегабайт: человек открывал
+ * список ивентов, а его телефон качал заодно карту с библиотекой Leaflet,
+ * оформление яндексовской схемы, экран квеста и страницу самопроверки.
+ * На мобильном интернете это лишние секунды до первого экрана.
+ *
+ * Отложены те экраны, которые тяжелее прочих или открываются не всегда:
+ * всё, где есть карта, квест с его заданиями, создание и правка встречи.
+ * Главная, список ивентов, профиль и вход остаются в основном файле —
+ * с них начинают, и ждать отдельной загрузки там нечего.
+ */
+const MapScreen = lazy(() => import('./screens/MapScreen'))
+const CreateEvent = lazy(() => import('./screens/CreateEvent'))
+const EditEvent = lazy(() => import('./screens/EditEvent'))
+const Quest = lazy(() => import('./screens/Quest'))
+const Chat = lazy(() => import('./screens/Chat'))
+const Summary = lazy(() => import('./screens/Summary'))
+const Archive = lazy(() => import('./screens/Archive'))
+const UserProfile = lazy(() => import('./screens/UserProfile'))
+const Health = lazy(() => import('./screens/Health'))
 
 /**
  * Экраны за входом. Без сессии уводим на приветствие, с сессией но без
@@ -121,6 +135,10 @@ function Router () {
     <LevelUp />
 
     <div key={pathname} className="animate-screen h-full">
+    {/* Пока отложенный экран догружается, на месте него — та же полоса
+        загрузки, что и при запросе данных: пустой экран выглядел бы
+        поломкой. */}
+    <Suspense fallback={<Loading label="Открываем…" />}>
     <Routes>
       <Route path="/start"      element={<Splash />} />
       <Route path="/onboarding" element={<Onboarding />} />
@@ -150,6 +168,7 @@ function Router () {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
     </div>
     </>
   )
