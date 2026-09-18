@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
-import { addMapTiles, eventPin } from '../lib/map'
+import { eventPin } from '../lib/map'
+import { createMapView, type MapMarker, type MapView } from '../lib/mapview'
 import { Button, Field, useAutofillGuard } from '../components/ui'
 import { CloseIcon, PinIcon, SearchIcon } from '../components/icons'
 import { venuesFor, type Venue } from '../data/venues'
@@ -27,9 +26,11 @@ export default function LocationPicker (
   const center = cityCenter(city)
 
   const container = useRef<HTMLDivElement>(null)
-  const map = useRef<L.Map | null>(null)
-  const marker = useRef<L.Marker | null>(null)
-  const myMarker = useRef<L.Marker | null>(null)
+  const map = useRef<MapView | null>(null)
+  const marker = useRef<MapMarker | null>(null)
+  const myMarker = useRef<MapMarker | null>(null)
+  // Карта готова не сразу: библиотеку ещё нужно загрузить.
+  const [ready, setReady] = useState(0)
   /** Карту к своей геопозиции подводим один раз: дальше её ведёт человек. */
   const centeredOnMe = useRef(false)
 
@@ -49,26 +50,38 @@ export default function LocationPicker (
   const pin = eventPin({ category: 'other' })
 
   useEffect(() => {
-    if (!container.current || map.current) return
+    const node = container.current
+    if (!node || map.current) return
 
-    map.current = L.map(container.current, { zoomControl: false })
-      .setView(point, 14)
+    let alive = true
 
-    addMapTiles(map.current)
+    createMapView(node, { center: point, zoom: 14 }).then((view) => {
+      if (!alive) return view.destroy()
 
-    marker.current = L.marker(point, { icon: pin }).addTo(map.current)
+      map.current = view
+      marker.current = view.marker({
+        at: point, html: pin.html, size: pin.size, anchor: pin.anchor,
+      })
 
-    // Тап по карте ставит точку и подтягивает адрес.
-    map.current.on('click', async (event: L.LeafletMouseEvent) => {
-      const next: [number, number] = [event.latlng.lat, event.latlng.lng]
-      setPoint(next)
-      marker.current?.setLatLng(next)
-      setLookingUp(true)
-      setAddress(await reverseGeocode(next[0], next[1]))
-      setLookingUp(false)
+      // Тап по карте ставит точку и подтягивает адрес.
+      view.onClick(async (next) => {
+        setPoint(next)
+        marker.current?.move(next)
+        setLookingUp(true)
+        setAddress(await reverseGeocode(next[0], next[1]))
+        setLookingUp(false)
+      })
+
+      setReady((step) => step + 1)
     })
 
-    return () => { map.current?.remove(); map.current = null }
+    return () => {
+      alive = false
+      map.current?.destroy()
+      map.current = null
+      marker.current = null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -88,17 +101,14 @@ export default function LocationPicker (
     if (!instance || !me) return
 
     myMarker.current?.remove()
-    myMarker.current = L.marker(me, {
-      icon: L.divIcon({
-        className: '',
-        html: `<span style="display:block;width:16px;height:16px;border-radius:999px;
-                            background:#8769FF;border:3px solid #fff;
-                            box-shadow:0 0 0 6px rgb(135 105 255 / .25)"></span>`,
-        iconSize: [16, 16],
-        iconAnchor: [8, 8],
-      }),
-      zIndexOffset: -500,
-    }).addTo(instance)
+    myMarker.current = instance.marker({
+      at: me,
+      html: `<span style="display:block;width:16px;height:16px;border-radius:999px;
+                          background:#8769FF;border:3px solid #fff;
+                          box-shadow:0 0 0 6px rgb(135 105 255 / .25)"></span>`,
+      size: [16, 16],
+      zIndex: -500,
+    })
 
     if (!initial && !centeredOnMe.current) {
       centeredOnMe.current = true
@@ -106,7 +116,7 @@ export default function LocationPicker (
     }
 
     return () => { myMarker.current?.remove(); myMarker.current = null }
-  }, [me, initial])
+  }, [me, initial, ready])
 
   // Поиск по карте: то, чего нет в подборке города. Запрос уходит не сразу,
   // а через паузу — иначе на каждую букву уходил бы отдельный запрос.
@@ -131,14 +141,14 @@ export default function LocationPicker (
     const next: [number, number] = [place.lat, place.lng]
     setPoint(next)
     setAddress(`${place.title}, ${place.address}`)
-    marker.current?.setLatLng(next)
+    marker.current?.move(next)
     map.current?.setView(next, 16)
   }
 
   async function useMyLocation () {
     if (!me) return
     setPoint(me)
-    marker.current?.setLatLng(me)
+    marker.current?.move(me)
     map.current?.setView(me, 16)
     setLookingUp(true)
     setAddress(await reverseGeocode(me[0], me[1]))

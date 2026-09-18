@@ -4,6 +4,7 @@ import { distanceMeters } from './geo'
 import type { Venue } from '../data/venues'
 import { fallbackQuest } from '../data/fallback-quest'
 import { nearbyPlaces, type NearbyPlace } from './places'
+import { describePoint, findPlaces } from './geocoder'
 import {
   EVENTS, MESSAGES, CATEGORIES,
   type CategoryCode, type ChatMessage, type Participant, type Quest, type QuestTask,
@@ -1495,18 +1496,25 @@ export function categoryCodes (): CategoryCode[] {
 }
 
 /**
- * Адрес → координаты. В ТЗ 11.1 для этого указан Geocoder Яндекса, он требует
- * платного ключа; в прототипе работает открытый Nominatim. Если адрес не
- * распознан, ставим центр города, чтобы создание ивента не срывалось.
+ * Адрес → координаты (ТЗ 11.1).
+ *
+ * Сначала спрашиваем геокодер Яндекса — он лучше разбирает русские адреса.
+ * Не ответил (нет ключа, кончилась квота, нет сети) — берём открытый
+ * Nominatim. Не распознали вовсе — ставим центр города, чтобы создание
+ * ивента не срывалось из-за опечатки в адресе.
  */
 export async function geocode (
   address: string, city?: string | null,
 ): Promise<[number, number]> {
   const fallback = cityCenter(city)
+  const text = `${address}, ${city ?? DEFAULT_CITY.name}`
+
+  const yandex = await findPlaces(text, 1)
+  if (yandex?.[0]) return [yandex[0].lat, yandex[0].lng]
+
   try {
-    const query = encodeURIComponent(`${address}, ${city ?? DEFAULT_CITY.name}`)
     const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`,
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=1`,
       { headers: { 'Accept-Language': 'ru' } },
     )
     if (!response.ok) return fallback
@@ -1530,6 +1538,17 @@ export async function searchPlaces (
 ): Promise<Venue[]> {
   const text = query.trim()
   if (text.length < 3) return []
+
+  const yandex = await findPlaces(`${text}, ${city ?? DEFAULT_CITY.name}`)
+  if (yandex && yandex.length > 0) {
+    return yandex.map((place) => ({
+      title: place.title,
+      address: place.address,
+      lat: place.lat,
+      lng: place.lng,
+      emoji: '📍',
+    }))
+  }
 
   try {
     const request = encodeURIComponent(`${text}, ${city ?? DEFAULT_CITY.name}`)
@@ -1567,6 +1586,9 @@ export async function searchPlaces (
 
 /** Координаты → адрес. Нужен, когда точку ставят пальцем на карте. */
 export async function reverseGeocode (lat: number, lng: number): Promise<string> {
+  const yandex = await describePoint(lat, lng)
+  if (yandex) return yandex
+
   try {
     const response = await fetch(
       `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=18`,

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import type React from 'react'
 
 /**
  * Выбор числа прокруткой — как барабан в системных часах.
@@ -27,6 +28,8 @@ export function NumberWheel (
 ) {
   const track = useRef<HTMLDivElement>(null)
   const settle = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** Когда колесо мыши двигало барабан в последний раз. */
+  const lastWheel = useRef(0)
   // Пока человек крутит барабан сам, программно его не двигаем — иначе
   // прокрутка дёргается под пальцем.
   const touched = useRef(false)
@@ -41,7 +44,44 @@ export function NumberWheel (
     if (!node || touched.current) return
 
     const index = Math.max(0, values.indexOf(value))
-    node.scrollTop = index * ITEM
+    const top = index * ITEM
+    if (Math.abs(node.scrollTop - top) > 1) node.scrollTo({ top, behavior: 'smooth' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, from, to])
+
+  /**
+   * Колесо мыши двигает барабан ровно на одно число.
+   *
+   * Одно деление колеса прокручивает страницу примерно на сто пикселей —
+   * это два с лишним числа, и половину значений так просто не поймать.
+   * Поэтому прокрутку колесом мы берём на себя: направление берём у
+   * события, шаг задаём сами.
+   */
+  function onWheel (event: React.WheelEvent<HTMLDivElement>) {
+    event.preventDefault()
+
+    // Тачпад шлёт события пачками по несколько десятков; без паузы один
+    // жест пролистал бы весь барабан.
+    const now = Date.now()
+    if (now - lastWheel.current < 120) return
+    lastWheel.current = now
+
+    const step = event.deltaY > 0 ? 1 : -1
+    const index = values.indexOf(value)
+    const next = values[Math.min(values.length - 1, Math.max(0, index + step))]
+
+    if (next !== undefined && next !== value) onChange(next)
+  }
+
+  // Слушатель ставится вручную: React вешает onWheel пассивно, а пассивный
+  // обработчик не может отменить прокрутку страницы.
+  useEffect(() => {
+    const node = track.current
+    if (!node) return
+
+    const handler = (event: WheelEvent) => onWheel(event as unknown as React.WheelEvent<HTMLDivElement>)
+    node.addEventListener('wheel', handler, { passive: false })
+    return () => node.removeEventListener('wheel', handler)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, from, to])
 

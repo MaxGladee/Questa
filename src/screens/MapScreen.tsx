@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
-import { addMapTiles, eventPin } from '../lib/map'
+import { eventPin } from '../lib/map'
+import { createMapView, type MapView } from '../lib/mapview'
 import { TabScreen } from '../components/Layout'
 import { Cover } from '../components/Art'
 import {
@@ -22,9 +21,9 @@ import { useToast } from '../components/Toast'
 import { cityCenter } from '../data/cities'
 import { placeEmoji, venuesAround, type NearbyPlace } from '../lib/places'
 
-// Карта на OpenStreetMap. В ТЗ 11.1 указан MapKit Яндекса — он требует
-// платного ключа и заявки, поэтому в прототипе подключён бесплатный источник
-// тайлов. Замена провайдера затрагивает только этот файл.
+// Какая карта под экраном — решает src/lib/mapview.ts: Яндекс, если есть
+// ключ и библиотека загрузилась, иначе OpenStreetMap. Экран об этом не
+// знает и работает с любым движком одинаково.
 
 export default function MapScreen () {
   const { profile } = useAuth()
@@ -36,7 +35,10 @@ export default function MapScreen () {
     (event) => event.status === 'active' || event.status === 'in_progress',
   )
   const container = useRef<HTMLDivElement>(null)
-  const map = useRef<L.Map | null>(null)
+  const map = useRef<MapView | null>(null)
+  // Карта собирается не мгновенно (библиотеку ещё нужно загрузить), и
+  // метки не могут появиться раньше неё.
+  const [ready, setReady] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
   const [filters, setFilters] = useState<MapFilterState>(NO_FILTERS)
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -49,14 +51,22 @@ export default function MapScreen () {
   const toast = useToast()
 
   useEffect(() => {
-    if (!container.current || map.current) return
+    const node = container.current
+    if (!node || map.current) return
 
-    map.current = L.map(container.current, { zoomControl: false })
-      .setView(cityCenter(profile?.city), 12)
+    let alive = true
 
-    addMapTiles(map.current)
+    createMapView(node, { center: cityCenter(profile?.city), zoom: 12 }).then((view) => {
+      if (!alive) return view.destroy()
+      map.current = view
+      setReady((step) => step + 1)
+    })
 
-    return () => { map.current?.remove(); map.current = null }
+    return () => {
+      alive = false
+      map.current?.destroy()
+      map.current = null
+    }
   }, [profile?.city])
 
   // Своя точка на карте: без неё непонятно, далеко ли до ивентов.
@@ -69,9 +79,9 @@ export default function MapScreen () {
 
         // Первый отклик приводит карту к себе: иначе метка «я» остаётся
         // где-то за краем экрана, и кажется, что её нет вовсе.
-        if (!centeredOnMe.current) {
+        if (!centeredOnMe.current && map.current) {
           centeredOnMe.current = true
-          map.current?.setView([coords.latitude, coords.longitude], 14)
+          map.current.setView([coords.latitude, coords.longitude], 14)
         }
       },
       () => {},
@@ -91,23 +101,20 @@ export default function MapScreen () {
       <Avatar name={profile.nickname} src={profile.avatarUrl} size={38} />,
     )
 
-    const marker = L.marker(me, {
-      icon: L.divIcon({
-        className: '',
-        html: `<span style="display:block;width:44px;height:44px;padding:3px;border-radius:999px;
-                            background:#8769FF;box-shadow:0 2px 10px rgb(0 0 0 / .5)">
-                 ${avatar}
-               </span>`,
-        iconSize: [44, 44],
-        iconAnchor: [22, 22],
-      }),
+    const marker = instance.marker({
+      at: me,
+      html: `<span style="display:block;width:44px;height:44px;padding:3px;border-radius:999px;
+                          background:#8769FF;box-shadow:0 2px 10px rgb(0 0 0 / .5)">
+               ${avatar}
+             </span>`,
+      size: [44, 44],
       // Ниже меток ивентов: своё положение и так понятно, а чужие метки
       // важнее не закрывать.
-      zIndexOffset: -500,
-    }).addTo(instance)
+      zIndex: -500,
+    })
 
     return () => { marker.remove() }
-  }, [me, profile?.avatarUrl, profile?.nickname])
+  }, [me, profile?.avatarUrl, profile?.nickname, ready])
 
   /**
    * Заведения рядом.
@@ -127,13 +134,13 @@ export default function MapScreen () {
       return
     }
 
-    const centre = map.current?.getCenter()
+    const centre = map.current?.center()
     if (!centre) return
 
     setLoadingVenues(true)
     toast('Ищем места рядом…')
 
-    const found = await venuesAround(centre.lat, centre.lng)
+    const found = await venuesAround(centre[0], centre[1])
     setVenues(found)
     setLoadingVenues(false)
 
@@ -144,29 +151,21 @@ export default function MapScreen () {
     const instance = map.current
     if (!instance || !venues) return
 
-    const layer = L.layerGroup().addTo(instance)
+    const markers = venues.map((place) => instance.marker({
+      at: [place.lat, place.lng],
+      html: `<span style="display:grid;place-items:center;width:30px;height:30px;
+                          border-radius:999px;background:#1B1235;font-size:15px;
+                          border:1px solid rgba(255,255,255,.18);
+                          box-shadow:0 2px 8px rgb(0 0 0 / .45)">
+               ${placeEmoji(place.kind)}
+             </span>`,
+      size: [30, 30],
+      zIndex: -200,
+      onClick: () => { setVenue(place); setSelected(null) },
+    }))
 
-    for (const place of venues) {
-      L.marker([place.lat, place.lng], {
-        icon: L.divIcon({
-          className: '',
-          html: `<span style="display:grid;place-items:center;width:30px;height:30px;
-                              border-radius:999px;background:#1B1235;font-size:15px;
-                              border:1px solid rgba(255,255,255,.18);
-                              box-shadow:0 2px 8px rgb(0 0 0 / .45)">
-                   ${placeEmoji(place.kind)}
-                 </span>`,
-          iconSize: [30, 30],
-          iconAnchor: [15, 15],
-        }),
-        zIndexOffset: -200,
-      })
-        .addTo(layer)
-        .on('click', () => { setVenue(place); setSelected(null) })
-    }
-
-    return () => { layer.remove() }
-  }, [venues])
+    return () => { for (const marker of markers) marker.remove() }
+  }, [venues, ready])
 
   const shown = events.filter((event) => matchesFilters(event, filters, me))
 
@@ -175,25 +174,27 @@ export default function MapScreen () {
     const instance = map.current
     if (!instance) return
 
-    const layer = L.layerGroup().addTo(instance)
-
-    for (const event of shown) {
-      L.marker([event.lat, event.lng], {
-        icon: eventPin({
-          cover: event.coverUrl,
-          category: event.category,
-          selected: event.id === selected,
-        }),
-        // Выбранная метка поднимается над соседними, иначе её перекрывают.
-        zIndexOffset: event.id === selected ? 1000 : 0,
+    const markers = shown.map((event) => {
+      const pin = eventPin({
+        cover: event.coverUrl,
+        category: event.category,
+        selected: event.id === selected,
       })
-        .addTo(layer)
-        .on('click', () => setSelected(event.id))
-    }
 
-    return () => { layer.remove() }
+      return instance.marker({
+        at: [event.lat, event.lng],
+        html: pin.html,
+        size: pin.size,
+        anchor: pin.anchor,
+        // Выбранная метка поднимается над соседними, иначе её перекрывают.
+        zIndex: event.id === selected ? 1000 : 0,
+        onClick: () => setSelected(event.id),
+      })
+    })
+
+    return () => { for (const marker of markers) marker.remove() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shown.map((item) => item.id).join(','), selected])
+  }, [shown.map((item) => item.id).join(','), selected, ready])
 
   const chosen = activeFilterCount(filters)
   const event = shown.find((item) => item.id === selected)

@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
-import { addMapTiles } from '../lib/map'
+import { createMapView, type MapMarker, type MapView } from '../lib/mapview'
 import { Button } from '../components/ui'
 import { CloseIcon, GeoTaskIcon } from '../components/icons'
 import { GEO_PRECISE, distanceMeters, formatDistance, formatDuration, geoErrorMessage } from '../lib/geo'
@@ -45,8 +43,10 @@ export default function GeoTask (
   const trip = Boolean(start) && distanceMeters(start!, target) > radius
 
   const container = useRef<HTMLDivElement>(null)
-  const map = useRef<L.Map | null>(null)
-  const youMarker = useRef<L.CircleMarker | null>(null)
+  const map = useRef<MapView | null>(null)
+  const youMarker = useRef<MapMarker | null>(null)
+  // Пока карта собирается, ставить на неё нечего.
+  const [mapReady, setMapReady] = useState(0)
 
   const [position, setPosition] = useState<[number, number] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -58,34 +58,40 @@ export default function GeoTask (
 
   // Карта с целевой точкой и кругом допустимого радиуса.
   useEffect(() => {
-    if (!container.current || map.current) return
+    const node = container.current
+    if (!node || map.current) return
 
-    map.current = L.map(container.current, {
-      zoomControl: false, dragging: false,
-      scrollWheelZoom: false, doubleClickZoom: false,
-    }).setView(target, 16)
+    let alive = true
 
-    addMapTiles(map.current)
+    createMapView(node, { center: target, zoom: 16, interactive: false }).then((view) => {
+      if (!alive) return view.destroy()
+      map.current = view
 
-    L.circle(target, {
-      radius, color: '#8769FF', weight: 2, fillColor: '#8769FF', fillOpacity: 0.18,
-    }).addTo(map.current)
+      view.circle(target, radius)
 
-    // Маршрут от места встречи к цели: без него непонятно, куда идти, —
-    // на карте видна одна точка, и она может оказаться за спиной.
-    if (trip && start) {
-      L.circleMarker(start, {
-        radius: 6, color: '#ffffff', weight: 2, fillColor: '#6B7280', fillOpacity: 1,
-      }).addTo(map.current).bindTooltip('Место встречи')
+      // Маршрут от места встречи к цели: без него непонятно, куда идти, —
+      // на карте видна одна точка, и она может оказаться за спиной.
+      if (trip && start) {
+        view.marker({
+          at: start,
+          html: `<span style="display:block;width:14px;height:14px;border-radius:999px;
+                              background:#6B7280;border:2px solid #fff"></span>`,
+          size: [14, 14],
+        })
+        view.line([start, target])
+        view.fitBounds([start, target])
+      }
 
-      L.polyline([start, target], {
-        color: '#8769FF', weight: 3, opacity: 0.7, dashArray: '8 8',
-      }).addTo(map.current)
+      setMapReady((step) => step + 1)
+    })
 
-      map.current.fitBounds(L.latLngBounds([start, target]).pad(0.3), { maxZoom: 17 })
+    return () => {
+      alive = false
+      map.current?.destroy()
+      map.current = null
+      youMarker.current = null
     }
-
-    return () => { map.current?.remove(); map.current = null }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target[0], target[1], radius, trip, start?.[0], start?.[1]])
 
   // Слежение за своим положением.
@@ -108,18 +114,26 @@ export default function GeoTask (
 
   // Своя точка на карте.
   useEffect(() => {
-    if (!map.current || !position) return
+    const instance = map.current
+    if (!instance || !position) return
 
     if (!youMarker.current) {
-      youMarker.current = L.circleMarker(position, {
-        radius: 8, color: '#fff', weight: 2, fillColor: '#00C400', fillOpacity: 1,
-      }).addTo(map.current)
+      youMarker.current = instance.marker({
+        at: position,
+        html: `<span style="display:block;width:16px;height:16px;border-radius:999px;
+                            background:#00C400;border:2px solid #fff"></span>`,
+        size: [16, 16],
+        zIndex: 100,
+      })
     } else {
-      youMarker.current.setLatLng(position)
+      youMarker.current.move(position)
     }
 
-    map.current.fitBounds(L.latLngBounds([position, target]).pad(0.4), { maxZoom: 17 })
-  }, [position, target[0], target[1]])
+    // В кадре и человек, и цель: по одной своей точке непонятно, в ту ли
+    // сторону идёшь.
+    instance.fitBounds(trip && start ? [position, target, start] : [position, target])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [position, target[0], target[1], mapReady])
 
   useEffect(() => {
     setInside(distance !== null && distance <= radius)

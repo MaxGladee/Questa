@@ -228,8 +228,7 @@ export default function Summary () {
 
         {waiting > 0 && (
           <p className="text-center text-[15px] leading-snug text-muted">
-            Пока можно передумать: звёзды меняются нажатием, а по той же звезде —
-            снимаются. Оценки уйдут по кнопке ниже, и после этого их не изменить.
+            Оценки уйдут по кнопке ниже — после этого их не изменить.
           </p>
         )}
 
@@ -237,7 +236,7 @@ export default function Summary () {
           disabled={busy}
           onClick={async () => { if (await send()) navigate('/events') }}
         >
-          {busy ? 'Отправляем…' : waiting > 0 ? `Отправить и закрыть · ${waiting}` : 'Готово'}
+          {busy ? 'Отправляем…' : waiting > 0 ? 'Отправить и закрыть' : 'Готово'}
         </Button>
       </div>
     </PlainScreen>

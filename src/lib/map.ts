@@ -1,31 +1,5 @@
-import L from 'leaflet'
 import { categoryArt } from '../data/category-art'
 import type { CategoryCode } from '../data/demo'
-
-/**
- * Подложка карты.
- *
- * Тёмные карты у готовых поставщиков требуют ключа — CARTO начал печатать
- * «API KEY REQUIRED» прямо поверх тайлов. Поэтому берётся обычный
- * OpenStreetMap, который открыт и ключа не просит, а тёмным он становится
- * уже в браузере: слой с тайлами инвертируется и подкрашивается (см.
- * `.questa-map` в index.css).
- *
- * Плюс такого решения не только в отсутствии ключа: нечего сломаться в день
- * показа из-за чужих изменений в условиях.
- */
-const TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
-
-/** Указание источника — условие бесплатного использования OpenStreetMap. */
-const CREDIT = '© OpenStreetMap'
-
-export function addMapTiles (map: L.Map): void {
-  L.tileLayer(TILES, { maxZoom: 19, attribution: CREDIT }).addTo(map)
-
-  // Рекламу самой библиотеки убираем, указание источника оставляем.
-  map.attributionControl?.setPrefix('')
-  map.getContainer().classList.add('questa-map')
-}
 
 /**
  * Метка ивента — «капля» из макетов вместо кружка.
@@ -41,7 +15,7 @@ export function addMapTiles (map: L.Map): void {
 export function eventPin (
   { cover, category, selected = false }:
   { cover?: string; category: CategoryCode; selected?: boolean },
-): L.DivIcon {
+): { html: string; size: [number, number]; anchor: 'bottom' } {
   const w = selected ? 46 : 36
   const h = selected ? 60 : 47
   const art = categoryArt(category)
@@ -66,12 +40,6 @@ export function eventPin (
                    border-radius:999px;overflow:hidden;display:block">${inner}</span>
     </span>`
 
-  return L.divIcon({
-    className: '',
-    html,
-    iconSize: [w, h],
-    // Острие капли, а не её середина: именно оно указывает на место.
-    iconAnchor: [w / 2, h],
-    popupAnchor: [0, -h],
-  })
+  // Острие капли, а не её середина: именно оно указывает на место.
+  return { html, size: [w, h], anchor: 'bottom' }
 }
