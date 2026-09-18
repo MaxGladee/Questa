@@ -12,53 +12,17 @@ const TABS = [
   { to: '/profile', label: 'Профиль', Icon: UserIcon },
 ]
 
-/**
- * Нижняя панель — «стекло», как в макетах.
- *
- * Раньше панель была почти непрозрачной, и размытие под ней не работало:
- * блик был, а стекла не было. Теперь сквозь неё видно то, что под ней, —
- * карту, обложки, ленту, — и панель перестала выглядеть приклеенной
- * плашкой.
- *
- * Стекло собирается из четырёх вещей, и все они дешёвые:
- *   1. размытие фона (backdrop-filter) с лёгким усилением цвета — без него
- *      сквозь панель просвечивал бы мусор из букв и меток;
- *   2. полупрозрачная заливка градиентом сверху вниз — иначе размытие
- *      выглядит грязным;
- *   3. светлая волосяная линия по верхнему краю (inset-тень) — это «кромка»
- *      стекла, именно она делает его выпуклым;
- *   4. косой блик поверх — слой, который не ловит нажатия.
- *
- * Настоящее «жидкое стекло» Apple умеет ещё преломлять фон по краям; в
- * вебе это делается SVG-фильтром смещения и на телефоне заметно тормозит
- * при прокрутке. Оно того не стоит: разница видна только рядом с
- * оригиналом, а панель тормозит всегда.
- */
 function BottomNav () {
   return (
-    <nav
-      className="pointer-events-auto absolute inset-x-3 bottom-3 z-20 flex items-center
-                 justify-between overflow-hidden rounded-full p-1.5
-                 bg-[linear-gradient(to_bottom,rgb(58_45_110/0.55),rgb(21_13_52/0.62))]
-                 backdrop-blur-xl backdrop-saturate-150
-                 shadow-[inset_0_1px_0_rgb(255_255_255/0.22),inset_0_-1px_0_rgb(255_255_255/0.06),0_12px_30px_-12px_rgb(0_0_0/0.75)]
-                 ring-1 ring-white/12"
-    >
-      {/* Блик: узкая светлая полоса наискось по верхней половине стекла. */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-1/2
-                   bg-[linear-gradient(105deg,rgb(255_255_255/0.14),rgb(255_255_255/0)_55%)]"
-      />
-
+    <nav className="pointer-events-auto absolute inset-x-3 bottom-3 z-20 flex items-center
+                    justify-between rounded-full border border-white/10 bg-surface/95 p-1.5
+                    backdrop-blur">
       {TABS.map(({ to, label, Icon }) => (
         <NavLink
           key={to} to={to} end={to === '/'}
           className={({ isActive }) =>
-            `relative flex flex-1 flex-col items-center gap-1 rounded-full py-2.5 text-[11px]
-             transition ${isActive
-               ? 'bg-accent/80 text-white shadow-[0_6px_18px_-8px_rgb(135_105_255/0.95),inset_0_1px_0_rgb(255_255_255/0.25)]'
-               : 'text-white/75'}`}
+            `flex flex-1 flex-col items-center gap-1 rounded-full py-2.5 text-[11px] transition
+             ${isActive ? 'bg-accent-2 text-white' : 'text-white/80'}`}
         >
           <Icon className="size-6" />
           {label}
@@ -136,9 +100,7 @@ export function TabScreen (
         key={pathname}
         className={fullBleed
           ? 'min-h-0 flex-1'
-          // Лента уходит под панель, а не упирается в неё: стеклу нужно
-          // что-то размывать, иначе оно выглядит матовой заглушкой.
-          : 'no-scrollbar flex-1 overflow-y-auto pb-24'}
+          : 'no-scrollbar flex-1 overflow-y-auto pb-28'}
       >
         {children}
       </div>
