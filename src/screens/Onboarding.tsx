@@ -29,9 +29,10 @@ const SLIDES = [
  * «Далее» делает ровно то же самое — прокручивает ленту к следующему
  * слайду, поэтому оба способа выглядят одинаково.
  *
- * Соседние слайды приглушены и чуть уменьшены, и по мере листания
- * возвращаются к полному размеру — за счёт этого один кадр перетекает в
- * другой, а не сменяется рывком. Прозрачность и масштаб считаются прямо из
+ * Соседние кадры видны по краям — сразу понятно, что лента листается и
+ * что впереди ещё что-то есть. Они приглушены и уменьшены, а по мере
+ * листания возвращаются к полному размеру: один кадр перетекает в другой,
+ * а не сменяется рывком. Прозрачность и масштаб считаются прямо из
  * положения прокрутки, поэтому картинка следует за пальцем.
  */
 export default function Onboarding () {
@@ -45,10 +46,34 @@ export default function Onboarding () {
 
   const finish = () => navigate('/register')
 
+  /**
+   * Геометрия ленты: где стоит первый кадр и через сколько следующий.
+   *
+   * Считается по настоящим размерам, а не по доле ширины экрана: кадры
+   * стоят между распорками, и любая арифметика «в процентах» тут промахнётся
+   * — проценты в вёрстке считаются от разных величин.
+   */
+  function geometry (element: HTMLDivElement) {
+    const slides = [...element.children].filter(
+      (node): node is HTMLElement => node instanceof HTMLElement && node.dataset.slide === 'yes',
+    )
+
+    const first = slides[0]
+    const second = slides[1]
+    if (!first) return { base: 0, step: element.clientWidth || 1 }
+
+    return {
+      base: first.offsetLeft - (element.clientWidth - first.clientWidth) / 2,
+      step: second ? second.offsetLeft - first.offsetLeft : element.clientWidth || 1,
+    }
+  }
+
   function go (index: number) {
     const element = track.current
     if (!element) return
-    element.scrollTo({ left: index * element.clientWidth, behavior: 'smooth' })
+
+    const { base, step } = geometry(element)
+    element.scrollTo({ left: base + index * step, behavior: 'smooth' })
   }
 
   // Прокрутка пальцем и прокрутка кнопкой приходят сюда одинаково.
@@ -56,7 +81,10 @@ export default function Onboarding () {
     const element = track.current
     if (!element) return
 
-    const onScroll = () => setOffset(element.scrollLeft / (element.clientWidth || 1))
+    const onScroll = () => {
+      const { base, step } = geometry(element)
+      setOffset((element.scrollLeft - base) / step)
+    }
     element.addEventListener('scroll', onScroll, { passive: true })
     return () => element.removeEventListener('scroll', onScroll)
   }, [])
@@ -75,16 +103,23 @@ export default function Onboarding () {
       <div className="flex flex-1 flex-col items-center justify-center gap-7">
         <div
           ref={track}
-          className="no-scrollbar flex h-[320px] w-full snap-x snap-mandatory overflow-x-auto
-                     overscroll-x-contain"
+          /* Кадр занимает 76% ширины, а по краям стоят распорки по 12% —
+             так соседние кадры выглядывают слева и справа, а активный
+             остаётся по центру даже на первом и последнем слайде.
+             Распорки, а не отступы у ленты: от отступов проценты внутри
+             начинают считаться от другой ширины, и кадры выходят уже. */
+          className="no-scrollbar flex h-[320px] w-full snap-x snap-mandatory gap-3
+                     overflow-x-auto overscroll-x-contain"
         >
+          <span className="w-[12%] shrink-0" aria-hidden />
+
           {SLIDES.map((slide, index) => {
             const distance = Math.min(1, Math.abs(offset - index))
 
             return (
               <div
-                key={slide.art}
-                className="flex w-full shrink-0 basis-full snap-center items-center justify-center px-6"
+                key={slide.art} data-slide="yes"
+                className="flex w-[76%] shrink-0 snap-center items-center justify-center"
               >
                 <img
                   src={`${import.meta.env.BASE_URL}art/${slide.art}`}
@@ -94,13 +129,15 @@ export default function Onboarding () {
                      от слайда к слайду. */
                   className="size-full rounded-[32px] object-contain"
                   style={{
-                    opacity: 1 - distance * 0.7,
-                    transform: `scale(${1 - distance * 0.14})`,
+                    opacity: 1 - distance * 0.55,
+                    transform: `scale(${1 - distance * 0.12})`,
                   }}
                 />
               </div>
             )
           })}
+
+          <span className="w-[12%] shrink-0" aria-hidden />
         </div>
 
         <div className="flex gap-2">
@@ -124,7 +161,7 @@ export default function Onboarding () {
                 aria-hidden={index !== step}
                 className="absolute inset-0 flex flex-col items-center gap-3 px-6 text-center"
                 style={{
-                  opacity: 1 - distance,
+                  opacity: Math.max(0, 1 - distance * 2.2),
                   // Текст сдвигается вдвое медленнее картинки — от этого
                   // слайды кажутся слоями, а не одной плоской лентой.
                   transform: `translateX(${(index - offset) * 50}%)`,
