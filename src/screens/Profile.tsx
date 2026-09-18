@@ -1,14 +1,25 @@
 import { Link } from 'react-router-dom'
 import { TabScreen } from '../components/Layout'
 import { Avatar, Progress } from '../components/ui'
-import { Empty, Loading } from '../components/States'
+import { Loading } from '../components/States'
 import { ChevronIcon, GearIcon } from '../components/icons'
-import { Cover } from '../components/Art'
+
 import { levelFromExp, levelProgress } from '../data/demo'
-import { listEvents, streakReward } from '../lib/api'
+import { listEvents } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
 import { DailyRewardCard } from '../components/DailyReward'
+import { Achievements } from '../components/Achievements'
+
+/** «12 встреч» / «1 встреча» / «22 встречи» — счёт по-русски. */
+function eventsWord (count: number): string {
+  const tens = count % 100
+  const ones = count % 10
+  if (tens > 10 && tens < 20) return 'встреч'
+  if (ones === 1) return 'встреча'
+  if (ones >= 2 && ones <= 4) return 'встречи'
+  return 'встреч'
+}
 
 function Stat (
   { value, label, badge, tone }:
@@ -78,46 +89,27 @@ export default function Profile () {
         <section className="space-y-3">
           <h2 className="text-[20px]">Статистика</h2>
           <div className="no-scrollbar -mx-5 flex gap-3 overflow-x-auto px-5">
-            <Stat
-              value={profile.streakDays} label="Дней подряд"
-              badge={`+${streakReward(Math.max(profile.streakDays, 1))} QP`} tone="bright"
-            />
+            <Stat value={profile.streakDays} label="Дней подряд" tone="bright" />
             <Stat value={profile.eventsAttended} label="Посещено" tone="dim" />
             <Stat value={profile.eventsHosted} label="Проведено" tone="dim" />
           </div>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-[20px]">Ачивки</h2>
-          <div className="rounded-card bg-surface-2 px-4 py-6 text-center text-[17px] text-muted">
-            Скоро
-          </div>
-        </section>
+        <Achievements profile={profile} />
 
-        <section className="space-y-3">
-          <h2 className="text-[20px]">История</h2>
-          {loading && <Loading />}
-          {!loading && history.length === 0 && <Empty label="Здесь появятся ваши ивенты" />}
-          {history.map((event) => (
-            <Link
-              key={event.id} to={`/event/${event.id}`}
-              className="flex items-center gap-4 rounded-card bg-surface-3 p-3.5"
-            >
-              <Cover
-                src={event.coverUrl} category={event.category}
-                className="size-12 shrink-0 rounded-xl" emojiClassName="text-2xl"
-              />
-              <span className="min-w-0 flex-1 truncate text-[17px]">{event.title}</span>
-              <ChevronIcon className="size-5 shrink-0 text-muted" />
-            </Link>
-          ))}
-        </section>
-
+        {/* Прошедшие встречи вынесены на отдельный экран: в профиле их
+            список оттеснял всё остальное вниз. */}
         <Link
-          to="/settings"
-          className="block rounded-card bg-surface-2 py-4 text-center text-[17px] text-muted"
+          to="/archive"
+          className="flex items-center gap-3 rounded-card bg-surface-2 p-4"
         >
-          Настройки
+          <span className="min-w-0 flex-1">
+            <span className="block text-[17px] font-semibold">Архив ивентов</span>
+            <span className="block text-[15px] text-muted">
+              {loading ? 'Считаем…' : `${history.length} ${eventsWord(history.length)}`}
+            </span>
+          </span>
+          <ChevronIcon className="size-5 shrink-0 text-muted" />
         </Link>
       </div>
     </TabScreen>

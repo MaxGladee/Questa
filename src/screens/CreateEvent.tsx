@@ -4,7 +4,7 @@ import { Button, Field, TextArea } from '../components/ui'
 import { CalendarIcon, CameraIcon, ClockIcon, CloseIcon, PinIcon } from '../components/icons'
 import LocationPicker from './LocationPicker'
 import { CATEGORIES, formatWhen, type CategoryCode } from '../data/demo'
-import type { Idea } from '../data/ideas'
+import type { IdeaSuggestion } from '../data/ideas'
 import {
   WEEKLY_EVENT_LIMIT, WEEKLY_LIMIT_ENABLED, createEvent, eventsLeftThisWeek, uploadImage,
 } from '../lib/api'
@@ -18,12 +18,16 @@ export default function CreateEvent () {
 
   // Форма могла быть открыта по готовой идее с главной — тогда поля уже
   // заполнены, и пользователю остаётся указать место и время.
-  const { state } = useLocation() as { state?: { idea?: Idea } }
+  const { state } = useLocation() as { state?: { idea?: IdeaSuggestion } }
   const idea = state?.idea
 
   const [title, setTitle] = useState(idea?.title ?? '')
   const [description, setDescription] = useState(idea?.description ?? '')
-  const [place, setPlace] = useState<{ address: string; lat: number; lng: number } | null>(null)
+  // Идея может прийти с местом — тогда форма заполнена целиком, и человеку
+  // остаётся выбрать день.
+  const [place, setPlace] = useState<{ address: string; lat: number; lng: number } | null>(
+    idea?.place ?? null,
+  )
   const [pickingPlace, setPickingPlace] = useState(false)
   const { data: left } = useAsync(
     () => profile ? eventsLeftThisWeek(profile.id) : Promise.resolve(WEEKLY_EVENT_LIMIT),

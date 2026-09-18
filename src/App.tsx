@@ -20,6 +20,7 @@ import Chat from './screens/Chat'
 import Quest from './screens/Quest'
 import Summary from './screens/Summary'
 import UserProfile from './screens/UserProfile'
+import Archive from './screens/Archive'
 import CreateEvent from './screens/CreateEvent'
 import Settings from './screens/Settings'
 import Notifications from './screens/Notifications'
@@ -70,6 +71,7 @@ function Router () {
       <Route path="/event/:id/quest" element={<RequireAuth><Quest /></RequireAuth>} />
       <Route path="/event/:id/summary" element={<RequireAuth><Summary /></RequireAuth>} />
       <Route path="/user/:id"        element={<RequireAuth><UserProfile /></RequireAuth>} />
+      <Route path="/archive"         element={<RequireAuth><Archive /></RequireAuth>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

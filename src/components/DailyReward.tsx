@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { claimDailyReward, getDailyReward, streakReward, type DailyReward } from '../lib/api'
+import { claimDailyReward, getDailyReward, type DailyReward } from '../lib/api'
 import { FlameIcon } from './icons'
 import { useToast } from './Toast'
 import { useAuth } from '../lib/auth'
@@ -65,7 +65,23 @@ export function DailyRewardCard () {
 
   return (
     <section className="space-y-3">
-      <h2 className="text-[20px]">Награда за вход</h2>
+      <div className="flex items-center gap-2">
+        <h2 className="text-[20px]">Награда за вход</h2>
+        {/* Правила игры прячутся за знаком вопроса: на экране им места нет,
+            но узнать их должно быть можно в одно касание. */}
+        <button
+          onClick={() => toast(
+            'Заходите каждый день и забирайте награду: 10 QP в первый день, '
+            + 'дальше +5 за каждый день серии, до 75. Пропустили двое суток — '
+            + 'серия начинается заново.',
+          )}
+          aria-label="Как работает награда"
+          className="grid size-5 place-items-center rounded-full border border-white/25
+                     text-[12px] font-bold text-muted"
+        >
+          ?
+        </button>
+      </div>
 
       <button
         onClick={claim} disabled={!state.canClaim || busy}
@@ -109,12 +125,6 @@ export function DailyRewardCard () {
         </p>
       )}
 
-      {!state.canClaim && (
-        <p className="text-[14px] leading-snug text-muted">
-          Завтра дадут +{streakReward(Math.min(state.streak + 1, 14))} QP — с каждым днём серии
-          награда растёт, до 75 QP.
-        </p>
-      )}
     </section>
   )
 }

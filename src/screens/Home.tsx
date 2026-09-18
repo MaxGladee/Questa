@@ -1,13 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { TabScreen } from '../components/Layout'
 import { EventListCard } from '../components/EventCard'
 import { Avatar, Progress, useAutofillGuard } from '../components/ui'
 import { Empty, Failed, Loading } from '../components/States'
-import { BellIcon, ChevronIcon, MicIcon, SearchIcon } from '../components/icons'
+import { BellIcon, ChevronIcon, MicIcon, PinIcon, SearchIcon } from '../components/icons'
 import { Cover } from '../components/Art'
-import { ideasForToday } from '../data/ideas'
+import { ideasForNow } from '../data/ideas'
 import { categoryTitle, formatTime, type QuestaEvent } from '../data/demo'
+import { formatDistance } from '../lib/geo'
 import { useAuth } from '../lib/auth'
 import { countUnread, getQuest, listEvents } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
@@ -73,6 +74,8 @@ export default function Home () {
   const { profile } = useAuth()
   const [day, setDay] = useState(0)
   const [query, setQuery] = useState('')
+  const [ideaSeed, setIdeaSeed] = useState(0)
+  const [near, setNear] = useState<[number, number] | null>(null)
   const guard = useAutofillGuard()
 
   const { data: events, error, loading, reload } = useAsync(
@@ -101,7 +104,27 @@ export default function Home () {
   const chosenDay = new Date()
   chosenDay.setDate(chosenDay.getDate() + day)
 
-  const ideas = ideasForToday()
+  // Идеи пересобираются, когда меняется время суток, город или положение —
+  // и по кнопке «другие». Внутри часа список не скачет под руками.
+  const ideas = useMemo(
+    () => ideasForNow({ seed: ideaSeed, city: profile?.city, near }),
+    [ideaSeed, profile?.city, near],
+  )
+
+  // Спрашиваем положение только если доступ уже разрешён: всплывающий
+  // запрос при первом открытии главной пугает, а идеи и без него работают.
+  useEffect(() => {
+    if (!('geolocation' in navigator) || !navigator.permissions) return
+
+    navigator.permissions.query({ name: 'geolocation' }).then((status) => {
+      if (status.state !== 'granted') return
+      navigator.geolocation.getCurrentPosition(
+        ({ coords }) => setNear([coords.latitude, coords.longitude]),
+        () => {},
+        { maximumAge: 300_000, timeout: 10_000 },
+      )
+    }).catch(() => {})
+  }, [])
 
   // Свои встречи по дням: те, куда человек записан или которые ведёт сам.
   const planned: Record<string, QuestaEvent[]> = {}
@@ -228,9 +251,17 @@ export default function Home () {
 
         {/* Когда рядом пусто, список идей полезнее пустого места. */}
         <section className="space-y-3 pb-2">
-          <h2 className="text-[24px]">Идеи для встречи</h2>
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-[24px]">Идеи для встречи</h2>
+            <button
+              onClick={() => setIdeaSeed((value) => value + 1)}
+              className="shrink-0 text-[15px] font-semibold text-accent-soft"
+            >
+              Другие
+            </button>
+          </div>
           <p className="-mt-1 text-[15px] leading-snug text-muted">
-            Нажмите — и форма создания заполнится сама, останется выбрать место и время.
+            Подборка меняется в течение дня. Нажмите — и форма создания заполнится сама.
           </p>
 
           {ideas.map((idea) => (
@@ -249,8 +280,17 @@ export default function Home () {
                   {idea.pitch}
                 </p>
                 <p className="mt-1 text-[13px] text-accent-soft">
-                  {categoryTitle(idea.category)}
+                  {categoryTitle(idea.category)} · {String(idea.hour).padStart(2, '0')}:00
                 </p>
+                {idea.place && (
+                  <p className="mt-1 flex items-center gap-1.5 text-[13px] text-muted">
+                    <PinIcon className="size-3.5 shrink-0" />
+                    <span className="truncate">
+                      {idea.place.address}
+                      {idea.distance !== undefined && ` · ${formatDistance(idea.distance)}`}
+                    </span>
+                  </p>
+                )}
               </div>
             </Link>
           ))}
