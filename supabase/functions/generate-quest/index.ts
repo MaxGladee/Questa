@@ -85,8 +85,17 @@ const QUEST_FORMAT = {
       geo: {
         type: 'object',
         additionalProperties: false,
-        required: ['title', 'description'],
-        properties: { title: { type: 'string' }, description: { type: 'string' } },
+        required: ['title', 'description', 'place_index', 'minutes'],
+        properties: {
+          title: { type: 'string' },
+          description: { type: 'string' },
+          // Номер места из списка «что рядом». Модель выбирает из готовых
+          // точек, а не выдумывает координаты: выдуманные не проверить, и
+          // задание стало бы невыполнимым.
+          place_index: { type: 'integer' },
+          // Сколько минут нужно пробыть на месте, чтобы задание засчиталось.
+          minutes: { type: 'integer' },
+        },
       },
       photo: {
         type: 'object',
@@ -207,11 +216,26 @@ function photoPrompt (task: string): string {
   человек понял, что переснять.`
 }
 
+interface NearbyPlace {
+  name: string
+  /** Чем это место является: парк, кафе, памятник — словом, а не кодом OSM. */
+  kind: string
+  lat: number
+  lng: number
+  /** Сколько метров от места встречи. */
+  meters: number
+}
+
 interface QuestContext {
   title: string
   description?: string
   category: string
   address: string
+  /** Координаты места встречи — от них строится маршрут гео-задания. */
+  lat?: number
+  lng?: number
+  /** Что есть вокруг: из этого списка модель выбирает цель гео-задания. */
+  nearby?: NearbyPlace[]
   /** Город: одно и то же название улицы есть в десятке городов. */
   city?: string
   /** Время начала — «вечером в пятницу» и «в среду утром» просят разного. */
@@ -255,6 +279,10 @@ const RESPONSE_SCHEMA = {
           title: { type: 'string' },
           description: { type: 'string' },
           prompt: { type: 'string' },
+          // Только у гео-задания: номер выбранной точки из списка «что
+          // рядом» и сколько минут там нужно пробыть.
+          place_index: { type: 'integer' },
+          minutes: { type: 'integer' },
           questions: {
             type: 'array',
             items: {
@@ -279,6 +307,11 @@ function buildPrompt (ctx: QuestContext): string {
     ? ctx.interests.map((code) => INTEREST_TITLES[code] ?? code).join(', ')
     : 'не указаны'
 
+  const places = (ctx.nearby ?? []).length
+    ? (ctx.nearby ?? []).map((place, index) =>
+        `  ${index}. ${place.name} — ${place.kind}, ${place.meters} м от места встречи`).join('\n')
+    : '  список пуст'
+
   return `Ты придумываешь квесты для приложения Questa — оно превращает обычную
 встречу небольшой компании в короткую игру.
 
@@ -292,6 +325,9 @@ function buildPrompt (ctx: QuestContext): string {
 - собралось человек: ${ctx.participants}
 - интересы собравшихся, от самого частого к редкому: ${interests}
 
+Что есть рядом с местом встречи (номер, название, чем является, расстояние):
+${places}
+
 Главное требование: задания должны быть про эту встречу и никакую другую.
 Человек, прочитав их, должен узнать своё место, свою компанию и свою тему.
 Общие формулировки вроде «сделайте селфи всей компанией» или «дойдите до
@@ -304,12 +340,25 @@ function buildPrompt (ctx: QuestContext): string {
 
 Придумай квест ровно из трёх заданий, строго в таком порядке.
 
-1. type "geolocation" — прийти на само место встречи, по адресу выше.
-   Никуда в сторону не отправляй: приложение засчитывает присутствие
-   именно по этому адресу, и «дойдите до соседнего памятника» превратится
-   в задание, которое нельзя выполнить. В description опиши, как понять,
-   что пришли: по какой вывеске, входу, ориентиру рядом — и привяжи это к
-   теме встречи.
+1. type "geolocation" — маленькая вылазка: дойти от места встречи до
+   другой точки и побыть там. На само место встречи звать не нужно —
+   приход к началу отмечается отдельной кнопкой и к квесту отношения не
+   имеет. Задание здесь в том, чтобы компания на несколько минут вышла
+   куда-то ещё.
+
+   Цель выбирается из списка «что есть рядом» выше: в place_index поставь
+   номер строки. Придумывать своё место или координаты нельзя — приложение
+   проверяет приход по координатам из списка, и выдуманная точка сделает
+   задание невыполнимым. Если список пуст, поставь place_index -1: тогда
+   целью останется место встречи.
+
+   Выбирай по смыслу, а не по близости: место должно подходить теме
+   встречи и времени суток, и до него должно быть разумно дойти пешком.
+   В minutes поставь, сколько минут там нужно пробыть, — от 3 до 10; это
+   время, которое компания проведёт на месте, а не время дороги.
+   В description объясни, зачем туда идти и что там делать вместе: не
+   «дойдите до точки», а короткое дело на эти несколько минут, связанное
+   с темой встречи.
 
 2. type "photo" — снимок. В поле prompt назови один конкретный предмет или
    объект, который обязан попасть в кадр, и свяжи его с местом или темой
@@ -457,6 +506,37 @@ function readJson (response: { content: Array<{ type: string; text?: string }> }
 const REWARDS = { geolocation: 20, photo: 25, quiz: 30 }
 
 /**
+ * Параметры гео-задания: откуда, куда и сколько там быть.
+ *
+ * Координаты берутся из списка мест, который ушёл модели, — по номеру
+ * строки. Так задание всегда указывает на существующую точку: модель
+ * выбирает из готового, а не сочиняет широту и долготу, проверить которые
+ * нечем. Не выбрала ничего (или рядом ничего не нашлось) — целью остаётся
+ * место встречи, и задание превращается в обычный приход.
+ */
+function geoParams (ctx: QuestContext, index: unknown, minutes: unknown) {
+  const list = ctx.nearby ?? []
+  const chosen = typeof index === 'number' && index >= 0 && index < list.length
+    ? list[index]
+    : null
+
+  const held = typeof minutes === 'number' && minutes >= 1 && minutes <= 15
+    ? Math.round(minutes)
+    : 5
+
+  return {
+    // Точка старта — место встречи: экран показывает маршрут целиком.
+    from_latitude: ctx.lat,
+    from_longitude: ctx.lng,
+    target_latitude: chosen?.lat ?? ctx.lat,
+    target_longitude: chosen?.lng ?? ctx.lng,
+    place_name: chosen?.name,
+    radius_meters: 60,
+    duration_seconds: held * 60,
+  }
+}
+
+/**
  * Квест от Claude.
  *
  * Ответ приходит строго по схеме (structured outputs): модель не может
@@ -477,7 +557,7 @@ async function questWithClaude (ctx: QuestContext) {
 
   const quest = readJson(response) as {
     title: string
-    geo: { title: string; description: string }
+    geo: { title: string; description: string; place_index?: number; minutes?: number }
     photo: { title: string; description: string; prompt: string }
     quiz: { title: string; description: string; questions: unknown[] }
   } | null
@@ -493,7 +573,7 @@ async function questWithClaude (ctx: QuestContext) {
         description: quest.geo.description,
         qp_reward: REWARDS.geolocation,
         is_shared: false,
-        params: { radius_meters: 50 },
+        params: geoParams(ctx, quest.geo.place_index, quest.geo.minutes),
       },
       {
         type: 'photo',
@@ -646,7 +726,7 @@ async function questWithCustom (ctx: QuestContext) {
     { role: 'user', content: buildPrompt(ctx) },
   ], QUEST_FORMAT.schema, 4000) as {
     title?: string
-    geo?: { title: string; description: string }
+    geo?: { title: string; description: string; place_index?: number; minutes?: number }
     photo?: { title: string; description: string; prompt: string }
     quiz?: { title: string; description: string; questions: unknown[] }
   } | null
@@ -662,7 +742,7 @@ async function questWithCustom (ctx: QuestContext) {
         description: quest.geo.description,
         qp_reward: REWARDS.geolocation,
         is_shared: false,
-        params: { radius_meters: 50 },
+        params: geoParams(ctx, quest.geo.place_index, quest.geo.minutes),
       },
       {
         type: 'photo',
@@ -726,7 +806,7 @@ async function photoWithClaude (prompt: string, image: string) {
 }
 
 /** Проверяет ответ модели. Возвращает квест или null, если ответ не годится. */
-function validateQuest (raw: unknown) {
+function validateQuest (raw: unknown, ctx: QuestContext) {
   if (typeof raw !== 'object' || raw === null) return null
   const quest = raw as Record<string, unknown>
   const tasks = quest.tasks
@@ -753,7 +833,11 @@ function validateQuest (raw: unknown) {
     }
 
     if (type === 'geolocation') {
-      return { ...base, params: { radius_meters: 50 }, is_shared: false }
+      return {
+        ...base,
+        params: geoParams(ctx, task.place_index, task.minutes),
+        is_shared: false,
+      }
     }
 
     if (type === 'photo') {
@@ -975,7 +1059,7 @@ Deno.serve(async (request) => {
           continue
         }
 
-        const quest = validateQuest(JSON.parse(text))
+        const quest = validateQuest(JSON.parse(text), ctx)
         if (!quest) {
           failures.push(`${model} → ответ не соответствует схеме квеста`)
           continue

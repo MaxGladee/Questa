@@ -23,6 +23,11 @@ export interface FallbackContext {
   category: CategoryCode
   address: string
   city: string
+  /** Координаты места встречи — начало маршрута гео-задания. */
+  lat?: number
+  lng?: number
+  /** Что есть вокруг: первое подходящее станет целью гео-задания. */
+  nearby?: { name: string; kind: string; lat: number; lng: number; meters: number }[]
 }
 
 /** Короткое имя места: «ЦПКИО им. Маяковского» из «ЦПКИО…, ул. Мичурина». */
@@ -60,17 +65,50 @@ function photoTask (context: FallbackContext): FallbackTask {
   }
 }
 
+/**
+ * Гео-задание — маленькая вылазка, а не приход на место встречи: на встречу
+ * и так приходят, и отмечается это отдельной кнопкой. Цель берётся из
+ * найденных вокруг мест; не нашлось ни одного — остаётся прежний вариант с
+ * приходом по адресу, потому что вести людей в точку без координат нельзя.
+ */
 function geoTask (context: FallbackContext): FallbackTask {
   const place = placeName(context.address)
+  const target = (context.nearby ?? [])[0]
+
+  if (!target) {
+    return {
+      type: 'geolocation',
+      title: `Дойти до «${place}»`,
+      description: `Доберитесь до места встречи — ${context.address} — и задержитесь на пару `
+        + 'минут: приложение само отметит, что вы на месте.',
+      qp_reward: 20,
+      is_shared: false,
+      params: {
+        radius_meters: 60,
+        duration_seconds: 120,
+        from_latitude: context.lat,
+        from_longitude: context.lng,
+      },
+    }
+  }
 
   return {
     type: 'geolocation',
-    title: `Дойти до «${place}»`,
-    description: `Доберитесь до места встречи — ${context.address} — и задержитесь на пару `
-      + 'минут: приложение само отметит, что вы на месте.',
+    title: `Вылазка к «${target.name}»`.slice(0, 60),
+    description: `Отойдите от места встречи к ${target.kind} «${target.name}» — это `
+      + `${target.meters} м — и побудьте там пять минут всей компанией. `
+      + 'Приложение засчитает задание само, как только вы дойдёте.',
     qp_reward: 20,
     is_shared: false,
-    params: { radius_meters: 60, duration_seconds: 120 },
+    params: {
+      radius_meters: 60,
+      duration_seconds: 300,
+      from_latitude: context.lat,
+      from_longitude: context.lng,
+      target_latitude: target.lat,
+      target_longitude: target.lng,
+      place_name: target.name,
+    },
   }
 }
 

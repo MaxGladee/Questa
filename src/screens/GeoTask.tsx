@@ -8,28 +8,41 @@ import { GEO_PRECISE, distanceMeters, formatDistance, formatDuration, geoErrorMe
 import type { QuestTask } from '../data/demo'
 
 /**
- * Задание типа «Геолокация» (ЧТЗ 5.11.1).
+ * Задание типа «Геолокация» (ЧТЗ 5.11.1) — вылазка.
+ *
+ * Это не отметка о присутствии. Присутствие отмечают на карточке ивента,
+ * и означает оно «я пришёл к началу»; здесь же компания отходит от места
+ * встречи к другой точке — парку, памятнику, набережной — и проводит там
+ * несколько минут. Две механики раньше совпадали, и гео-задание выглядело
+ * повторной отметкой: люди уже стояли в цели, задание засчитывалось само.
  *
  * Пока экран открыт, приложение следит за перемещением и показывает
- * расстояние до цели. Если у задания задана длительность, отсчёт идёт только
- * внутри радиуса: вышел за круг — таймер встаёт на паузу, вернулся — пошёл
- * дальше, накопленное не сгорает.
+ * расстояние до цели. Отсчёт идёт только внутри радиуса: вышел за круг —
+ * таймер встаёт на паузу, вернулся — пошёл дальше, накопленное не сгорает.
  *
  * Ограничение, о котором важно помнить: браузер отдаёт координаты только
  * открытому приложению. Следить за телефоном в кармане с потушенным экраном
  * веб-версия не может — это умеет нативное приложение.
  */
 export default function GeoTask (
-  { task, target, onClose, onDone }: {
+  { task, target, start, onClose, onDone }: {
     task: QuestTask
     /** Координаты цели: своя точка задания либо место проведения ивента. */
     target: [number, number]
+    /** Откуда идти — место встречи. Совпадает с целью у старых заданий. */
+    start?: [number, number]
     onClose: () => void
     onDone: () => void
   },
 ) {
   const radius = task.params?.radius_meters ?? 50
   const required = task.params?.duration_seconds ?? 0
+  const place = task.params?.place_name
+
+  // Вылазка — когда цель заметно в стороне от места встречи. Если точки
+  // совпадают (старое задание или вокруг ничего не нашлось), экран ведёт
+  // себя как прежде и лишнего не обещает.
+  const trip = Boolean(start) && distanceMeters(start!, target) > radius
 
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
@@ -58,8 +71,22 @@ export default function GeoTask (
       radius, color: '#8769FF', weight: 2, fillColor: '#8769FF', fillOpacity: 0.18,
     }).addTo(map.current)
 
+    // Маршрут от места встречи к цели: без него непонятно, куда идти, —
+    // на карте видна одна точка, и она может оказаться за спиной.
+    if (trip && start) {
+      L.circleMarker(start, {
+        radius: 6, color: '#ffffff', weight: 2, fillColor: '#6B7280', fillOpacity: 1,
+      }).addTo(map.current).bindTooltip('Место встречи')
+
+      L.polyline([start, target], {
+        color: '#8769FF', weight: 3, opacity: 0.7, dashArray: '8 8',
+      }).addTo(map.current)
+
+      map.current.fitBounds(L.latLngBounds([start, target]).pad(0.3), { maxZoom: 17 })
+    }
+
     return () => { map.current?.remove(); map.current = null }
-  }, [target[0], target[1], radius])
+  }, [target[0], target[1], radius, trip, start?.[0], start?.[1]])
 
   // Слежение за своим положением.
   useEffect(() => {
@@ -112,6 +139,12 @@ export default function GeoTask (
         <button onClick={onClose} aria-label="Закрыть"><CloseIcon className="size-7" /></button>
       </header>
 
+      {trip && (
+        <p className="px-5 pb-2 text-[15px] text-accent">
+          Вылазка от места встречи{place ? ` · ${place}` : ''}
+        </p>
+      )}
+
       <p className="px-5 pb-4 text-[17px] leading-snug text-white/80">{task.description}</p>
 
       <div ref={container} className="mx-5 min-h-0 flex-1 overflow-hidden rounded-card bg-surface" />
@@ -128,7 +161,7 @@ export default function GeoTask (
               <div className="min-w-0">
                 <p className="text-[19px] font-bold">
                   {distance === null ? 'Ищем вас на карте…'
-                    : inside ? 'Вы на месте' : 'Идите к точке'}
+                    : inside ? 'Вы на месте' : trip ? 'Идите к цели вылазки' : 'Идите к точке'}
                 </p>
                 <p className="text-[16px] text-muted">
                   {distance === null
@@ -154,6 +187,13 @@ export default function GeoTask (
               </div>
             )}
           </div>
+        )}
+
+        {trip && (
+          <p className="text-center text-[14px] leading-snug text-muted">
+            Это задание квеста, а не отметка о присутствии: отметиться на встрече
+            можно кнопкой на карточке ивента.
+          </p>
         )}
 
         <Button disabled={!ready} onClick={onDone}>

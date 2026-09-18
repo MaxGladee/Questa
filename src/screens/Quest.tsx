@@ -200,10 +200,12 @@ export default function Quest () {
 
           <span className="min-w-0 flex-1">
             <span className={`block text-[18px] font-bold ${checkedIn ? 'text-muted' : ''}`}>
-              {checkedIn ? 'Вы на месте' : busy ? 'Проверяем геопозицию…' : 'Я на месте'}
+              {checkedIn ? 'Вы пришли' : busy ? 'Проверяем геопозицию…' : 'Я пришёл'}
             </span>
             <span className={`block text-[15px] ${checkedIn ? 'text-muted' : 'text-white/85'}`}>
-              {checkedIn ? 'Отмечено · +50 XP' : 'Нужно быть у места встречи · +50 XP'}
+              {checkedIn
+                ? 'Компания видит, что вы на месте · +50 XP'
+                : 'Отметка о приходе к началу встречи · +50 XP'}
             </span>
           </span>
 
@@ -334,6 +336,10 @@ export default function Quest () {
           target={[
             geoTask.params?.target_latitude ?? event.lat,
             geoTask.params?.target_longitude ?? event.lng,
+          ]}
+          start={[
+            geoTask.params?.from_latitude ?? event.lat,
+            geoTask.params?.from_longitude ?? event.lng,
           ]}
           onClose={() => setGeoTask(null)}
           onDone={() => { finish(geoTask, geoTask.qpReward); setGeoTask(null) }}

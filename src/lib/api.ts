@@ -3,6 +3,7 @@ import { DEFAULT_CITY, cityCenter } from '../data/cities'
 import { distanceMeters } from './geo'
 import type { Venue } from '../data/venues'
 import { fallbackQuest } from '../data/fallback-quest'
+import { nearbyPlaces, type NearbyPlace } from './places'
 import {
   EVENTS, MESSAGES, CATEGORIES,
   type CategoryCode, type ChatMessage, type Participant, type Quest, type QuestTask,
@@ -224,6 +225,11 @@ export interface QuestContext {
   participants: number
   /** Интересы собравшихся, от самых частых в компании к редким. */
   interests: string[]
+  /** Координаты места встречи: от них строится маршрут гео-задания. */
+  lat: number
+  lng: number
+  /** Что есть вокруг — из этого модель выбирает цель гео-задания. */
+  nearby: NearbyPlace[]
 }
 
 /**
@@ -284,7 +290,7 @@ async function questContext (eventId: string): Promise<QuestContext | null> {
 
   const { data: event } = await client
     .from('event')
-    .select('title, description, address, starts_at, category:interest (code)')
+    .select('title, description, address, lat, lng, starts_at, category:interest (code)')
     .eq('id', eventId).maybeSingle()
 
   if (!event) return null
@@ -314,16 +320,24 @@ async function questContext (eventId: string): Promise<QuestContext | null> {
     .map(([code]) => code)
 
   const category = (Array.isArray(event.category) ? event.category[0] : event.category) as Row | null
+  const code = (category?.code ?? 'other') as CategoryCode
+
+  // Что есть вокруг места встречи. Поиск необязателен: не ответил — гео-
+  // задание останется приходом на место встречи, как было раньше.
+  const nearby = await nearbyPlaces(event.lat, event.lng, code).catch(() => [])
 
   return {
     title: event.title,
     description: event.description ?? '',
-    category: (category?.code ?? 'other') as CategoryCode,
+    category: code,
     address: event.address,
     city: ((members ?? [])[0] as Row | undefined)?.app_user?.city ?? DEFAULT_CITY.name,
     startsAt: event.starts_at,
     participants: ids.length,
     interests,
+    lat: event.lat,
+    lng: event.lng,
+    nearby,
   }
 }
 
@@ -375,6 +389,9 @@ async function buildFallbackQuest (
       category: context.category,
       address: context.address,
       city: context.city,
+      lat: context.lat,
+      lng: context.lng,
+      nearby: context.nearby,
     })
 
     await saveQuest(eventId, 'template', null, tasks as GeneratedTask[])

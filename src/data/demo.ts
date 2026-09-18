@@ -96,8 +96,14 @@ export interface QuestTask {
   questions?: { question: string; options: string[]; correctIndex: number }[]
   /** Параметры задания: цель и радиус для геолокации, подсказка для фото. */
   params?: {
+    /** Откуда идти: место встречи. */
+    from_latitude?: number
+    from_longitude?: number
+    /** Куда идти — цель вылазки, обычно не место встречи. */
     target_latitude?: number
     target_longitude?: number
+    /** Название цели, чтобы не показывать голые координаты. */
+    place_name?: string
     radius_meters?: number
     duration_seconds?: number
     prompt?: string
@@ -207,8 +213,15 @@ const karaokeQuest: Quest = {
     },
     {
       id: 'k2', position: 2, type: 'geolocation', qpReward: 100, isShared: false, completed: false,
-      title: 'Гео-трекинг', description: 'Провести в караоке 2 часа',
-      params: { radius_meters: 50, duration_seconds: 120 },
+      title: 'Вылазка к «Плотинке»',
+      description: 'Между песнями дойдите всей компанией до Плотинки — это пять минут '
+        + 'пешком — и побудьте там пять минут: воздух, вода и общая фотография настроения.',
+      params: {
+        radius_meters: 60, duration_seconds: 300,
+        from_latitude: 56.8380, from_longitude: 60.5975,
+        target_latitude: 56.8375, target_longitude: 60.6045,
+        place_name: 'Плотинка',
+      },
     },
     {
       id: 'k3', position: 3, type: 'quiz', qpReward: 50, isShared: true, completed: false,
