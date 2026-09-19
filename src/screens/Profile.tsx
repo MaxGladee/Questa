@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { TabScreen } from '../components/Layout'
 import { Avatar, Progress } from '../components/ui'
 import { Loading } from '../components/States'
-import { ChevronIcon, GearIcon } from '../components/icons'
+import { CalendarIcon, ChevronIcon, GearIcon, ShareIcon } from '../components/icons'
 
 import { levelFromExp, levelProgress } from '../data/demo'
 import { listEvents } from '../lib/api'
@@ -10,6 +10,8 @@ import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
 import { DailyRewardCard } from '../components/DailyReward'
 import { Achievements } from '../components/Achievements'
+import { useToast } from '../components/Toast'
+import { appInvite, shareInvite } from '../lib/invite'
 
 /** «12 встреч» / «1 встреча» / «22 встречи» — счёт по-русски. */
 function eventsWord (count: number): string {
@@ -46,11 +48,24 @@ function Stat (
 
 export default function Profile () {
   const { profile } = useAuth()
+  const toast = useToast()
   const { data: events, loading } = useAsync(
     () => listEvents(profile?.id ?? null), [profile?.id],
   )
 
   if (!profile) return <TabScreen><Loading /></TabScreen>
+
+  /**
+   * Позвать знакомого в приложение, а не на конкретную встречу.
+   *
+   * Раньше поделиться можно было только ивентом — то есть сначала нужно
+   * было его собрать. А одному в Questa делать нечего: встреча на двоих
+   * это минимум, и первого человека приходится звать откуда-то извне.
+   */
+  const invite = async () => {
+    const outcome = await shareInvite(appInvite(profile.nickname))
+    if (outcome === 'copied') toast('Приглашение скопировано')
+  }
 
   const level = levelFromExp(profile.expTotal)
   const { current, next } = levelProgress(profile.expTotal)
@@ -106,6 +121,10 @@ export default function Profile () {
           to="/archive"
           className="flex items-center gap-3 rounded-card bg-surface-2 p-4"
         >
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent/20
+                           text-accent-soft">
+            <CalendarIcon className="size-5" />
+          </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[17px] font-semibold">Архив ивентов</span>
             <span className="block text-[15px] text-muted">
@@ -114,6 +133,24 @@ export default function Profile () {
           </span>
           <ChevronIcon className="size-5 shrink-0 text-muted" />
         </Link>
+
+        <button
+          onClick={invite}
+          className="flex w-full items-center gap-3 rounded-card bg-surface-2 p-4 text-left
+                     transition active:scale-[0.99]"
+        >
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent/20
+                           text-accent-soft">
+            <ShareIcon className="size-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[17px] font-semibold">Позвать друга в Questa</span>
+            <span className="block text-[15px] leading-snug text-muted">
+              Вдвоём уже можно собираться
+            </span>
+          </span>
+          <ChevronIcon className="size-5 shrink-0 text-muted" />
+        </button>
       </div>
     </TabScreen>
   )

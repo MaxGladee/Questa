@@ -18,6 +18,7 @@ import { Lightbox } from '../components/Lightbox'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
 import { useToast } from '../components/Toast'
+import { appLink, shareInvite } from '../lib/invite'
 
 const STATUS_LABEL = {
   active: 'Ожидание',
@@ -145,7 +146,7 @@ export default function EventDetails () {
    * входа, после входа попадёт сразу на этот ивент, а не на главную.
    */
   const share = async () => {
-    const link = `${window.location.origin}${import.meta.env.BASE_URL}#/event/${event.id}`
+    const link = appLink(`/event/${event.id}`)
 
     // К ссылке идёт короткий рассказ о встрече и о самом приложении: в
     // мессенджере видна одна строка, и «зайди сюда» без объяснения
@@ -158,18 +159,10 @@ export default function EventDetails () {
       'превращается в квест с заданиями и очками. Присоединяйся 👇',
     ].join('\n')
 
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: event.title, text, url: link })
-        return
-      }
-
-      // Без системного окна копируем приглашение целиком, а не голую ссылку.
-      await navigator.clipboard.writeText(`${text}\n${link}`)
-      toast('Приглашение скопировано')
-    } catch {
-      // Отказ в системном окне — не ошибка, человек просто передумал.
-    }
+    // Без системного окна приглашение копируется целиком, а не голой
+    // ссылкой; отказ в окне — не ошибка, человек просто передумал.
+    const outcome = await shareInvite({ title: event.title, text, url: link })
+    if (outcome === 'copied') toast('Приглашение скопировано')
   }
 
   return (
