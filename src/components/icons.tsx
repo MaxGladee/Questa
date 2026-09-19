@@ -175,6 +175,13 @@ export const EyeOffIcon = ({ className }: IconProps) => (
   </svg>
 )
 
+export const ChatIcon = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+       strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M20 12a7.5 7.5 0 0 1-7.5 7.5H8l-4 2.5.9-3.6A7.5 7.5 0 1 1 20 12Z" />
+  </svg>
+)
+
 export const CheckIcon = ({ className }: IconProps) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"
        strokeLinecap="round" strokeLinejoin="round" className={className}>

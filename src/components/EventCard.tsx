@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { CalendarIcon, ChevronIcon, PinIcon, SparkIcon, StarIcon, UserIcon } from './icons'
+import { CalendarIcon, ChatIcon, ChevronIcon, PinIcon, StarIcon, UserIcon } from './icons'
 import { Cover } from './Art'
 import { formatDate, formatTime, type EventStatus, type QuestaEvent } from '../data/demo'
 
@@ -9,6 +9,16 @@ const STATUS_LABEL: Partial<Record<EventStatus, string>> = {
   in_progress: 'Идёт сейчас',
   finished: 'Завершён',
   cancelled: 'Отменён',
+}
+
+/** «1 сообщение» / «3 сообщения» / «7 сообщений». */
+function messagesWord (count: number): string {
+  const tens = count % 100
+  const ones = count % 10
+  if (tens > 10 && tens < 20) return 'сообщений'
+  if (ones === 1) return 'сообщение'
+  if (ones >= 2 && ones <= 4) return 'сообщения'
+  return 'сообщений'
 }
 
 /** Карточка ивента в списке — состав элементов задан в ЧТЗ 5.3. */
@@ -67,12 +77,14 @@ export function EventListCard (
           {event.myRole === 'organizer' ? ' · вы организатор' : ''}
         </span>
 
-        {/* Новые сообщения: иначе о них узнаёшь, только зайдя в чат. */}
+        {/* Новые сообщения: иначе о них узнаёшь, только зайдя в чат.
+            Считаются только написанные людьми — служебные объявления вроде
+            «ивент начался» и так приходят уведомлениями. */}
         {(unread ?? 0) > 0 && (
           <span className="flex items-center gap-1.5 rounded-xl bg-accent px-3 py-1.5
                            text-[14px] font-semibold">
-            <SparkIcon className="size-4" />
-            {unread} в чате
+            <ChatIcon className="size-4" />
+            {unread} {messagesWord(unread!)}
           </span>
         )}
 

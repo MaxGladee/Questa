@@ -162,6 +162,7 @@ export default function Health () {
       { key: '012_rate_reminder', title: '012 — напоминание оценить встречу' },
       { key: '013_invite_card', title: '013 — карточка встречи по ссылке' },
       { key: '014_chat_unread', title: '014 — непрочитанные сообщения' },
+      { key: '015_unread_people_only', title: '015 — в счётчике только сообщения людей' },
     ]
 
     try {
