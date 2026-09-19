@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Button, Field } from '../components/ui'
+import { Button, Field, Form } from '../components/ui'
 import { BackIcon } from '../components/icons'
 import { useAuth } from '../lib/auth'
 
@@ -54,7 +54,7 @@ export default function Forgot () {
             <Button variant="ghost" onClick={() => setSent(false)}>Отправить ещё раз</Button>
           </>
         ) : (
-          <>
+          <Form onSubmit={submit} className="space-y-4">
             <p className="text-[17px] leading-snug text-white/80">
               Пришлём ссылку на почту, по которой вы регистрировались.
             </p>
@@ -66,10 +66,10 @@ export default function Forgot () {
 
             {error && <p className="px-2 text-[15px] text-red-400">{error}</p>}
 
-            <Button onClick={submit} disabled={busy || !email.trim()}>
+            <Button type="submit" disabled={busy || !email.trim()}>
               {busy ? 'Отправляем…' : 'Прислать ссылку'}
             </Button>
-          </>
+          </Form>
         )}
 
         <p className="text-center text-[16px] text-white/80">

@@ -38,6 +38,45 @@ const TONE: Record<Status, string> = {
   fail: 'text-red-400',
 }
 
+/**
+ * Насколько окно приложения совпадает с экраном телефона.
+ *
+ * На айфоне, добавленном на домашний экран, окно умеет оказаться ниже
+ * экрана — и снизу остаётся полоса, до которой странице не дотянуться.
+ * Увидеть это можно только на самом устройстве, поэтому цифры печатаются
+ * здесь: экран, окно, безопасные поля и режим запуска.
+ */
+function inset (side: 'top' | 'bottom'): number {
+  const probe = document.createElement('div')
+  probe.style.cssText =
+    `position:fixed;left:0;width:0;height:env(safe-area-inset-${side},0px);pointer-events:none`
+  document.body.append(probe)
+  const value = Math.round(probe.getBoundingClientRect().height)
+  probe.remove()
+  return value
+}
+
+function screenCheck (): Check {
+  const portrait = window.innerHeight >= window.innerWidth
+  const sides = [window.screen.width, window.screen.height]
+  const screenHeight = portrait ? Math.max(...sides) : Math.min(...sides)
+  const gap = Math.round(screenHeight - window.innerHeight)
+
+  const where = isStandalone() ? 'с домашнего экрана' : 'во вкладке браузера'
+  const detail = `окно ${Math.round(window.innerWidth)}×${Math.round(window.innerHeight)}`
+    + ` · экран ${Math.round(portrait ? Math.min(...sides) : Math.max(...sides))}×${screenHeight}`
+    + ` · поля ${inset('top')} и ${inset('bottom')} · ${where}`
+
+  // В браузере окно и должно быть ниже экрана: сверху и снизу панели Safari.
+  if (!isStandalone() || gap <= 2) return { key: 'screen', title: 'Экран', status: 'ok', detail }
+
+  return {
+    key: 'screen', title: 'Экран', status: 'warn',
+    detail: `${detail} · окно ниже экрана на ${gap} — удалите иконку с домашнего `
+      + 'экрана и добавьте заново, иначе снизу остаётся пустая полоса',
+  }
+}
+
 export default function Health () {
   const { session, profile } = useAuth()
   const [checks, setChecks] = useState<Check[]>([])
@@ -55,7 +94,7 @@ export default function Health () {
   useEffect(() => { void runChecks() }, [session?.user.id])
 
   async function runChecks () {
-    const result: Check[] = []
+    const result: Check[] = [screenCheck()]
     const add = (key: string, title: string, status: Status, detail: string) =>
       result.push({ key, title, status, detail })
 

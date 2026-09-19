@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Button, PasswordField } from '../components/ui'
+import { Button, Form, PasswordField } from '../components/ui'
 import { Loading } from '../components/States'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../lib/auth'
@@ -42,7 +42,7 @@ export default function ResetPassword () {
       <h1 className="text-[28px]">Новый пароль</h1>
 
       {session ? (
-        <>
+        <Form onSubmit={submit} className="space-y-4">
           <p className="text-[17px] leading-snug text-white/80">
             Придумайте пароль, с которым будете входить дальше.
           </p>
@@ -58,10 +58,10 @@ export default function ResetPassword () {
 
           {error && <p className="px-2 text-[15px] text-red-400">{error}</p>}
 
-          <Button onClick={submit} disabled={busy}>
+          <Button type="submit" disabled={busy}>
             {busy ? 'Сохраняем…' : 'Сохранить пароль'}
           </Button>
-        </>
+        </Form>
       ) : (
         <>
           {/* Ссылка живёт час: без действующей сессии менять нечего. */}

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Button, Field, PasswordField } from '../components/ui'
+import { Button, Field, Form, PasswordField } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { takeDestination } from '../lib/destination'
 
@@ -31,7 +31,7 @@ export default function Login () {
         <span className="text-[34px] font-extrabold">Questa</span>
       </div>
 
-      <div className="space-y-4">
+      <Form onSubmit={submit} className="space-y-4">
         <h1 className="text-[28px]">Авторизация</h1>
 
         <Field
@@ -45,7 +45,7 @@ export default function Login () {
 
         {error && <p className="px-2 text-[15px] text-red-400">{error}</p>}
 
-        <Button onClick={submit} disabled={busy}>{busy ? 'Входим…' : 'Войти'}</Button>
+        <Button type="submit" disabled={busy}>{busy ? 'Входим…' : 'Войти'}</Button>
 
         <p className="text-center">
           <Link to="/forgot" className="text-[16px] text-muted">Забыли пароль?</Link>
@@ -54,7 +54,7 @@ export default function Login () {
         <p className="text-center text-[16px] text-white/80">
           Нет аккаунта? <Link to="/register" className="font-semibold text-accent">Зарегистрироваться</Link>
         </p>
-      </div>
+      </Form>
     </div>
   )
 }

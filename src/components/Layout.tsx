@@ -31,19 +31,19 @@ function BottomNav () {
         // Обёртка спускается ниже безопасного поля рамки — до самого низа
         // экрана, — а панель внутри поднята на его высоту.
         bottom: 'calc(-1 * var(--safe-bottom))',
-        paddingBottom: 'calc(var(--safe-bottom) + 12px)',
+        paddingBottom: 'calc(var(--safe-bottom) + 8px)',
       }}
     >
       <nav className="pointer-events-auto mx-3 flex items-center justify-between rounded-full
-                      border border-white/10 bg-surface/95 p-1.5 backdrop-blur">
+                      border border-white/10 bg-surface/95 p-1 backdrop-blur">
         {TABS.map(({ to, label, Icon }) => (
           <NavLink
             key={to} to={to} end={to === '/'}
             className={({ isActive }) =>
-              `flex flex-1 flex-col items-center gap-1 rounded-full py-2.5 text-[11px] transition
+              `flex flex-1 flex-col items-center gap-0.5 rounded-full py-2 text-[11px] transition
                ${isActive ? 'bg-accent-2 text-white' : 'text-white/80'}`}
           >
-            <Icon className="size-6" />
+            <Icon className="size-[22px]" />
             {label}
           </NavLink>
         ))}

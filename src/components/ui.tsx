@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes, TextareaHTMLAttributes } from 'react'
 import { parseAvatarSeed } from './avatar-art'
 import { GeneratedAvatar } from './GeneratedAvatar'
@@ -28,6 +28,66 @@ export function Button (
     >
       {children}
     </button>
+  )
+}
+
+/** Поля формы по порядку — те, по которым имеет смысл ходить клавишей. */
+function fieldsOf (form: HTMLFormElement | null): HTMLInputElement[] {
+  if (!form) return []
+  return [...form.querySelectorAll<HTMLInputElement>('input')]
+    .filter((field) => !field.disabled && field.type !== 'hidden')
+}
+
+/**
+ * Форма, у которой работает клавиша на клавиатуре телефона.
+ *
+ * Человек набирает почту и жмёт «ввод» — а не происходит ничего: полей
+ * несколько, кнопка отдельно, и браузеру нечего отправлять, потому что
+ * формы как таковой не было. Приходилось каждый раз убирать клавиатуру и
+ * целиться в поле пальцем.
+ *
+ * Здесь это решается сразу для всех: ввод в любом поле, кроме последнего,
+ * переводит в следующее, в последнем — отправляет. На самой клавише при
+ * этом появляется нужная подпись: «дальше» или «go».
+ */
+export function Form (
+  { onSubmit, children, className }:
+  { onSubmit: () => void; children: ReactNode; className?: string },
+) {
+  const form = useRef<HTMLFormElement>(null)
+
+  // Подписи пересчитываются после каждой отрисовки: полей могло стать
+  // больше или меньше — например, появилось подтверждение пароля.
+  useEffect(() => {
+    const fields = fieldsOf(form.current)
+    fields.forEach((field, index) => {
+      field.enterKeyHint = index === fields.length - 1 ? 'go' : 'next'
+    })
+  })
+
+  return (
+    <form
+      ref={form} className={className} noValidate
+      onSubmit={(event) => { event.preventDefault(); onSubmit() }}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter') return
+
+        // В многострочном поле ввод — это перенос строки, а не переход.
+        const target = event.target as HTMLElement
+        if (target.tagName !== 'INPUT') return
+
+        const fields = fieldsOf(form.current)
+        const index = fields.indexOf(target as HTMLInputElement)
+
+        // На последнем поле ввод отправляет форму — этим занимается браузер.
+        if (index === -1 || index === fields.length - 1) return
+
+        event.preventDefault()
+        fields[index + 1].focus()
+      }}
+    >
+      {children}
+    </form>
   )
 }
 

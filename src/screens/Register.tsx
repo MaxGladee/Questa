@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Button, Field, PasswordField } from '../components/ui'
+import { Button, Field, Form, PasswordField } from '../components/ui'
 import { useAuth } from '../lib/auth'
 
 export default function Register () {
@@ -37,7 +37,7 @@ export default function Register () {
         <span className="text-[34px] font-extrabold">Questa</span>
       </div>
 
-      <div className="space-y-4">
+      <Form onSubmit={submit} className="space-y-4">
         <h1 className="text-[28px]">Регистрация</h1>
 
         <Field
@@ -55,14 +55,14 @@ export default function Register () {
 
         {error && <p className="px-2 text-[15px] text-red-400">{error}</p>}
 
-        <Button onClick={submit} disabled={busy} className="mt-2">
+        <Button type="submit" disabled={busy} className="mt-2">
           {busy ? 'Создаём аккаунт…' : 'Зарегистрироваться'}
         </Button>
 
         <p className="text-center text-[16px] text-white/80">
           Уже зарегистрирован? <Link to="/login" className="font-semibold text-accent">Войти</Link>
         </p>
-      </div>
+      </Form>
     </div>
   )
 }
