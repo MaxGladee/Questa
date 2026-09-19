@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { createMapView, type MapMarker, type MapView } from '../lib/mapview'
 import { Button } from '../components/ui'
 import { CloseIcon, GeoTaskIcon } from '../components/icons'
-import { GEO_PRECISE, distanceMeters, formatDistance, formatDuration, geoErrorMessage } from '../lib/geo'
+import {
+  GEO_PRECISE, distanceMeters, everAllowed, formatDistance, formatDuration, locateMe, watchMe,
+} from '../lib/geo'
 import type { QuestTask } from '../data/demo'
 
 /**
@@ -50,6 +52,8 @@ export default function GeoTask (
 
   const [position, setPosition] = useState<[number, number] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [watching, setWatching] = useState(everAllowed)
+  const [asking, setAsking] = useState(false)
   const [inside, setInside] = useState(false)
   const [heldSeconds, setHeld] = useState(0)
 
@@ -96,23 +100,44 @@ export default function GeoTask (
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target[0], target[1], radius, trip, start?.[0], start?.[1]])
 
-  // Слежение за своим положением.
+  /*
+   * Слежение за своим положением.
+   *
+   * Последняя известная точка здесь не годится, в отличие от карты: по ней
+   * можно оказаться «на месте», не выходя из дома. Задание засчитывается
+   * только по свежим координатам.
+   *
+   * Само слежение начинается сразу лишь у того, кто доступ уже давал. У
+   * остальных — по кнопке: Safari на iPhone показывает окно с вопросом
+   * охотнее в ответ на действие человека, а молчаливый отказ на открытии
+   * экрана выглядел как «задание сломалось».
+   */
   useEffect(() => {
-    if (!('geolocation' in navigator)) {
-      return setError('Устройство не умеет определять местоположение')
-    }
+    if (!watching) return
 
-    const watch = navigator.geolocation.watchPosition(
-      ({ coords }) => {
+    return watchMe(
+      (at) => {
         setError(null)
-        setPosition([coords.latitude, coords.longitude])
+        setPosition(at)
       },
-      (cause) => setError(geoErrorMessage(cause)),
+      (trouble) => setError(trouble.message),
       GEO_PRECISE,
     )
+  }, [watching])
 
-    return () => navigator.geolocation.clearWatch(watch)
-  }, [])
+  async function allowGeo () {
+    setAsking(true)
+    setError(null)
+
+    try {
+      setPosition(await locateMe())
+      setWatching(true)
+    } catch (trouble) {
+      setError(trouble instanceof Error ? trouble.message : 'Не удалось определить, где вы')
+    } finally {
+      setAsking(false)
+    }
+  }
 
   // Своя точка на карте.
   useEffect(() => {
@@ -166,10 +191,16 @@ export default function GeoTask (
       <div ref={container} className="mx-5 min-h-0 flex-1 overflow-hidden rounded-card bg-surface" />
 
       <div className="flex shrink-0 flex-col gap-4 p-5">
-        {error ? (
-          <p className="rounded-card bg-surface-2 p-4 text-[16px] leading-snug text-muted">
-            {error}
-          </p>
+        {error || !watching ? (
+          <div className="space-y-3 rounded-card bg-surface-2 p-4">
+            <p className="text-[16px] leading-snug text-muted">
+              {error ?? 'Чтобы засчитать вылазку, приложению нужно знать, где вы. '
+                + 'Координаты никуда не уходят: они сравниваются с целью прямо на телефоне.'}
+            </p>
+            <Button onClick={allowGeo} disabled={asking}>
+              {asking ? 'Определяем…' : error ? 'Попробовать снова' : 'Разрешить геопозицию'}
+            </Button>
+          </div>
         ) : (
           <div className="rounded-card bg-surface-2 p-5">
             <div className="flex items-center gap-3">

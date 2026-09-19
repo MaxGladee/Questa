@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { isApple, isStandalone } from './device'
 
 /**
  * Установка на домашний экран.
@@ -47,35 +48,16 @@ if (typeof window !== 'undefined') {
   })
 }
 
-/** Приложение уже открыто с домашнего экрана, а не во вкладке. */
-function standalone (): boolean {
-  if (typeof window === 'undefined') return false
-  if (window.matchMedia?.('(display-mode: standalone)').matches) return true
-  // Старый способ Safari, который так и не заменили на общий.
-  return (navigator as Navigator & { standalone?: boolean }).standalone === true
-}
-
-/**
- * iPhone и iPad. Там события `beforeinstallprompt` нет ни в одном
- * браузере, зато есть пункт в окне «Поделиться» — его и подсказываем.
- */
-function isApple (): boolean {
-  if (typeof navigator === 'undefined') return false
-  if (/iPad|iPhone|iPod/.test(navigator.userAgent)) return true
-  // iPad с iPadOS представляется настольным Safari, выдаёт его только касание.
-  return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1
-}
-
 export type InstallOutcome = 'installed' | 'declined' | 'unavailable'
 
 export function useInstall () {
   const [ready, setReady] = useState(() => waiting !== null)
-  const [installed, setInstalled] = useState(standalone)
+  const [installed, setInstalled] = useState(isStandalone)
 
   useEffect(() => {
     const update = () => {
       setReady(waiting !== null)
-      setInstalled(standalone())
+      setInstalled(isStandalone())
     }
 
     listeners.add(update)

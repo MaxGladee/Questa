@@ -15,7 +15,7 @@ import {
 import { Cover } from '../components/Art'
 import { ideasForNow } from '../data/ideas'
 import { categoryTitle, formatTime, type QuestaEvent } from '../data/demo'
-import { GEO_QUICK, formatDistance } from '../lib/geo'
+import { everAllowed, formatDistance, lastFix, locateMe } from '../lib/geo'
 import { useAuth } from '../lib/auth'
 import { countUnread, getQuest, listEvents } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
@@ -156,19 +156,26 @@ export default function Home () {
     [profile?.city, near],
   )
 
-  // Спрашиваем положение только если доступ уже разрешён: всплывающий
-  // запрос при первом открытии главной пугает, а идеи и без него работают.
+  /*
+   * Где человек находится — на главной знать приятно, но не обязательно:
+   * идеи и рекомендации работают и по городу из профиля. Поэтому окно с
+   * вопросом отсюда не показывается никогда.
+   *
+   * Раньше согласие проверялось через Permissions API — и на iPhone это не
+   * работало вовсе: Safari про геопозицию там не знает и отвечает ошибкой,
+   * так что «рядом с вами» у него не появлялось ни при каких условиях.
+   * Теперь берём последнюю известную точку, а спрашиваем браузер только у
+   * тех, кто уже давал доступ.
+   */
   useEffect(() => {
-    if (!('geolocation' in navigator) || !navigator.permissions) return
+    const known = lastFix()
+    if (known) {
+      setNear(known)
+      return
+    }
 
-    navigator.permissions.query({ name: 'geolocation' }).then((status) => {
-      if (status.state !== 'granted') return
-      navigator.geolocation.getCurrentPosition(
-        ({ coords }) => setNear([coords.latitude, coords.longitude]),
-        () => {},
-        GEO_QUICK,
-      )
-    }).catch(() => {})
+    if (!everAllowed()) return
+    locateMe().then(setNear).catch(() => {})
   }, [])
 
   // Свои встречи по дням: те, куда человек записан или которые ведёт сам.

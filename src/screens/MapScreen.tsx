@@ -13,7 +13,7 @@ import {
 import { renderToStaticMarkup } from 'react-dom/server'
 import { Avatar } from '../components/ui'
 import { LocateIcon, PinIcon } from '../components/icons'
-import { GEO_QUICK, distanceMeters, formatDistance, geoErrorMessage } from '../lib/geo'
+import { distanceMeters, everAllowed, formatDistance, lastFix, locateMe, watchMe } from '../lib/geo'
 import { listEvents } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
@@ -43,6 +43,7 @@ export default function MapScreen () {
   const [filters, setFilters] = useState<MapFilterState>(NO_FILTERS)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [me, setMe] = useState<[number, number] | null>(null)
+  const [watching, setWatching] = useState(everAllowed)
   const [venues, setVenues] = useState<NearbyPlace[] | null>(null)
   const [venue, setVenue] = useState<NearbyPlace | null>(null)
   const [loadingVenues, setLoadingVenues] = useState(false)
@@ -93,27 +94,35 @@ export default function MapScreen () {
     map.current.setView(cityCenter(profile.city), 12)
   }, [profile?.city, ready])
 
-  // Своя точка на карте: без неё непонятно, далеко ли до ивентов.
+  /*
+   * Своя точка на карте: без неё непонятно, далеко ли до ивентов.
+   *
+   * Начинаем с последней известной — она показывается сразу и никого ни о
+   * чём не спрашивает. Слежение включается само только у того, кто доступ
+   * уже давал: раньше карта запрашивала его при каждом открытии, и на
+   * iPhone человек встречал окно с вопросом раньше самой карты, а отказ
+   * потом не переспросишь. Остальные нажмут кнопку — и Safari покажет
+   * вопрос охотнее, потому что это ответ на действие.
+   */
   useEffect(() => {
-    if (!('geolocation' in navigator)) return
-
-    const watch = navigator.geolocation.watchPosition(
-      ({ coords }) => {
-        setMe([coords.latitude, coords.longitude])
-
-        // Первый отклик приводит карту к себе: иначе метка «я» остаётся
-        // где-то за краем экрана, и кажется, что её нет вовсе.
-        if (!centeredOnMe.current && map.current) {
-          centeredOnMe.current = true
-          map.current.setView([coords.latitude, coords.longitude], 14)
-        }
-      },
-      () => {},
-      GEO_QUICK,
-    )
-
-    return () => navigator.geolocation.clearWatch(watch)
+    // Полчаса для метки «я» — слишком много: берём только совсем свежее.
+    const known = lastFix(10 * 60_000)
+    if (known) setMe(known)
   }, [])
+
+  useEffect(() => {
+    if (!watching) return
+    return watchMe(setMe)
+  }, [watching])
+
+  // Первая же точка приводит карту к себе: иначе метка «я» остаётся где-то
+  // за краем экрана, и кажется, что её нет вовсе. Дальше карта слушается
+  // только человека — за ним она не бегает.
+  useEffect(() => {
+    if (!map.current || centeredOnMe.current || !me) return
+    centeredOnMe.current = true
+    map.current.setView(me, 14)
+  }, [me, ready])
 
   // Своя точка — аватар в кружке, а не безликая точка: на карте с метками
   // ивентов сразу понятно, которая из них ты.
@@ -227,28 +236,24 @@ export default function MapScreen () {
   const event = shown.find((item) => item.id === selected)
 
   function showMe () {
-    if (me) {
-      map.current?.flyTo(me, 15)
-      return
-    }
-
-    if (!('geolocation' in navigator)) {
-      toast('Браузер не умеет определять геопозицию')
-      return
-    }
+    // Известная точка показывается сразу — нажатие не должно казаться
+    // пустым. Но если она из памяти, а слежения нет, следом спрашиваем
+    // заново: человек нажимает «где я», а не «где я был полчаса назад».
+    if (me) map.current?.flyTo(me, 15)
+    if (watching) return
 
     // Запрос идёт по нажатию, а не сам по себе: Safari на iPhone
-    // показывает окно с вопросом только в ответ на действие человека.
-    toast('Определяем, где вы…')
+    // показывает окно с вопросом охотнее в ответ на действие человека.
+    toast(me ? 'Уточняем, где вы…' : 'Определяем, где вы…')
 
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        setMe([coords.latitude, coords.longitude])
-        map.current?.flyTo([coords.latitude, coords.longitude], 15)
-      },
-      (problem) => toast(geoErrorMessage(problem)),
-      GEO_QUICK,
-    )
+    locateMe().then((at) => {
+      setMe(at)
+      map.current?.flyTo(at, 15)
+      // Раз доступ дали — дальше точка едет за человеком сама.
+      setWatching(true)
+    }).catch((trouble) => {
+      toast(trouble instanceof Error ? trouble.message : 'Не удалось определить, где вы', 'error')
+    })
   }
 
   return (

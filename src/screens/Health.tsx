@@ -4,6 +4,8 @@ import { Button } from '../components/ui'
 import { verifyPhoto } from '../lib/api'
 import { db, isLive } from '../lib/supabase'
 import { YANDEX_KEY, loadYmaps, mapFailure } from '../lib/ymaps'
+import { everAllowed, lastFix, locateMe } from '../lib/geo'
+import { isApple, isStandalone } from '../lib/device'
 import { useAuth } from '../lib/auth'
 
 /**
@@ -47,6 +49,8 @@ export default function Health () {
   const [providersBusy, setProvidersBusy] = useState(false)
   const [mapState, setMapState] = useState<Check | null>(null)
   const [mapBusy, setMapBusy] = useState(false)
+  const [geoState, setGeoState] = useState<Check | null>(null)
+  const [geoBusy, setGeoBusy] = useState(false)
 
   useEffect(() => { void runChecks() }, [session?.user.id])
 
@@ -264,6 +268,50 @@ export default function Health () {
     })
 
     setMapBusy(false)
+  }
+
+  /**
+   * Геопозиция: отдаёт ли её браузер и что именно отвечает, когда нет.
+   *
+   * Проверять это можно только на самом устройстве, а из всех устройств
+   * тяжелее прочих iPhone: разрешение там живёт в двух местах сразу, окно
+   * с вопросом появляется не всегда, а приложению видно одно слово
+   * «отказано». Здесь печатается всё, что вообще известно: где мы,
+   * защищённая ли страница, давал ли человек доступ раньше и с какой
+   * точностью пришёл ответ.
+   */
+  async function checkGeo () {
+    setGeoBusy(true)
+
+    const where = [
+      isApple() ? 'iPhone/iPad' : 'не Apple',
+      isStandalone() ? 'с домашнего экрана' : 'во вкладке браузера',
+      window.isSecureContext ? 'https' : 'НЕ https',
+      everAllowed() ? 'доступ уже давали' : 'доступа ещё не давали',
+      lastFix() ? 'есть свежая точка' : 'свежей точки нет',
+    ].join(' · ')
+
+    setGeoState({
+      key: 'geo', title: 'Геопозиция', status: 'checking', detail: `${where} · спрашиваем…`,
+    })
+
+    const started = Date.now()
+
+    try {
+      const [lat, lng] = await locateMe()
+      setGeoState({
+        key: 'geo', title: 'Геопозиция', status: 'ok',
+        detail: `${lat.toFixed(5)}, ${lng.toFixed(5)} · за ${
+          ((Date.now() - started) / 1000).toFixed(1)} с · ${where}`,
+      })
+    } catch (trouble) {
+      setGeoState({
+        key: 'geo', title: 'Геопозиция', status: 'fail',
+        detail: `${trouble instanceof Error ? trouble.message : 'отказ без объяснения'} · ${where}`,
+      })
+    } finally {
+      setGeoBusy(false)
+    }
   }
 
   /**
@@ -492,7 +540,8 @@ export default function Health () {
     }
   }
 
-  const all = [...checks, ...providers, mapState, aiState, photoState].filter(Boolean) as Check[]
+  const all = [...checks, ...providers, mapState, geoState, aiState, photoState]
+    .filter(Boolean) as Check[]
 
   return (
     <div className="no-scrollbar h-full overflow-y-auto px-5 pb-10 pt-6">
@@ -540,6 +589,11 @@ export default function Health () {
         <Button variant="ghost" onClick={runChecks}>Проверить заново</Button>
         <Button variant="ghost" disabled={mapBusy} onClick={checkMap}>
           {mapBusy ? 'Загружаем карту…' : 'Проверить карту Яндекса'}
+        </Button>
+        {/* Проверка по нажатию, а не сама: окно с вопросом о геопозиции
+            не должно выскакивать от одного открытия служебного экрана. */}
+        <Button variant="ghost" disabled={geoBusy} onClick={checkGeo}>
+          {geoBusy ? 'Определяем, где вы…' : 'Проверить геопозицию'}
         </Button>
         <Button variant="ghost" disabled={providersBusy} onClick={checkProviders}>
           {providersBusy ? 'Опрашиваем…' : 'Проверить поставщиков модели'}

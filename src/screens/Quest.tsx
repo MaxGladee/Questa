@@ -10,7 +10,7 @@ import type { QuestTask } from '../data/demo'
 import {
   REGENERATE_COST, checkIn, completeTask, getEvent, getQuest, regenerateQuest,
 } from '../lib/api'
-import { GEO_QUICK, distanceMeters, formatDistance, geoErrorMessage } from '../lib/geo'
+import { distanceMeters, formatDistance, locateMe } from '../lib/geo'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
 import { useCountUp } from '../lib/useCountUp'
@@ -148,18 +148,8 @@ export default function Quest () {
     setPresenceNote('')
 
     try {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        if (!('geolocation' in navigator)) {
-          reject(new Error('Устройство не умеет определять геопозицию'))
-          return
-        }
-        navigator.geolocation.getCurrentPosition(resolve, reject, GEO_QUICK)
-      })
-
-      const away = distanceMeters(
-        [position.coords.latitude, position.coords.longitude],
-        [event.lat, event.lng],
-      )
+      const at = await locateMe()
+      const away = distanceMeters(at, [event.lat, event.lng])
 
       if (away > CHECKIN_RADIUS) {
         setPresence('idle')
@@ -181,11 +171,10 @@ export default function Quest () {
       refreshProfile().catch(() => {})
     } catch (cause) {
       setPresence('idle')
-      setPresenceNote(
-        cause instanceof GeolocationPositionError
-          ? geoErrorMessage(cause)
-          : cause instanceof Error ? cause.message : 'Не удалось отметиться',
-      )
+      // Отказ геолокации приходит сюда уже объяснённым словами: ловить
+      // GeolocationPositionError по имени нельзя — в старых Safari такого
+      // глобального имени нет, и проверка сама роняла обработчик.
+      setPresenceNote(cause instanceof Error ? cause.message : 'Не удалось отметиться')
     }
   }
 

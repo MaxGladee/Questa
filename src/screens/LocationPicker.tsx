@@ -6,7 +6,7 @@ import { CloseIcon, PinIcon, SearchIcon } from '../components/icons'
 import { venuesFor, type Venue } from '../data/venues'
 import { cityCenter } from '../data/cities'
 import { reverseGeocode, searchPlaces } from '../lib/api'
-import { GEO_QUICK, distanceMeters, formatDistance } from '../lib/geo'
+import { distanceMeters, everAllowed, formatDistance, lastFix, locateMe } from '../lib/geo'
 import { useAuth } from '../lib/auth'
 
 /**
@@ -43,6 +43,7 @@ export default function LocationPicker (
   const [found, setFound] = useState<Venue[]>([])
   const [searching, setSearching] = useState(false)
   const [lookingUp, setLookingUp] = useState(false)
+  const [geoNote, setGeoNote] = useState('')
   const guard = useAutofillGuard()
 
   const nearby = venuesFor(city)
@@ -86,13 +87,18 @@ export default function LocationPicker (
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Сами ни о чём не спрашиваем: место встречи человек всё равно выбирает
+  // руками, а окно с вопросом при открытии экрана только мешает. Берём
+  // последнюю известную точку, а у тех, кто доступ уже давал, — свежую.
   useEffect(() => {
-    if (!('geolocation' in navigator)) return
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => setMe([coords.latitude, coords.longitude]),
-      () => {},
-      GEO_QUICK,
-    )
+    const known = lastFix(10 * 60_000)
+    if (known) {
+      setMe(known)
+      return
+    }
+
+    if (!everAllowed()) return
+    locateMe().then(setMe).catch(() => {})
   }, [])
 
   // Своя точка на карте выбора места: от неё считаются расстояния до мест,
@@ -147,14 +153,30 @@ export default function LocationPicker (
     map.current?.setView(next, 16)
   }
 
+  /**
+   * «Я сейчас здесь» — место встречи там, где человек стоит.
+   *
+   * Координаты спрашиваются заново, даже если точка уже есть: последняя
+   * известная годится, чтобы нарисовать кружок на карте, но не чтобы
+   * назначить по ней встречу. И это нажатие — лучший момент, чтобы Safari
+   * на iPhone показал своё окно с вопросом.
+   */
   async function useMyLocation () {
-    if (!me) return
-    setPoint(me)
-    marker.current?.move(me)
-    map.current?.setView(me, 16)
+    setGeoNote('')
     setLookingUp(true)
-    setAddress(await reverseGeocode(me[0], me[1]))
-    setLookingUp(false)
+
+    try {
+      const at = await locateMe()
+      setMe(at)
+      setPoint(at)
+      marker.current?.move(at)
+      map.current?.setView(at, 16)
+      setAddress(await reverseGeocode(at[0], at[1]))
+    } catch (trouble) {
+      setGeoNote(trouble instanceof Error ? trouble.message : 'Не удалось определить, где вы')
+    } finally {
+      setLookingUp(false)
+    }
   }
 
   const text = query.trim().toLowerCase()
@@ -179,14 +201,23 @@ export default function LocationPicker (
       </p>
 
       <div className="no-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pt-3">
-        {me && (
-          <button
-            onClick={useMyLocation}
-            className="flex w-full items-center gap-3 rounded-card bg-surface-3 p-3.5 text-left"
-          >
-            <PinIcon className="size-6 shrink-0 text-accent" />
-            <span className="flex-1 text-[16px] font-semibold">Я сейчас здесь</span>
-          </button>
+        {/* Кнопка стоит всегда, а не только когда положение уже известно:
+            раньше на iPhone она просто не появлялась — Safari не отдаёт
+            координаты без спроса, а спросить было нечем. */}
+        <button
+          onClick={useMyLocation} disabled={lookingUp}
+          className="flex w-full items-center gap-3 rounded-card bg-surface-3 p-3.5 text-left"
+        >
+          <PinIcon className="size-6 shrink-0 text-accent" />
+          <span className="flex-1 text-[16px] font-semibold">
+            {lookingUp ? 'Определяем, где вы…' : 'Я сейчас здесь'}
+          </span>
+        </button>
+
+        {geoNote && (
+          <p className="rounded-card bg-surface-2 p-3.5 text-[15px] leading-snug text-muted">
+            {geoNote}
+          </p>
         )}
 
         <label className="flex items-center gap-2 rounded-field bg-field px-4 py-3">
