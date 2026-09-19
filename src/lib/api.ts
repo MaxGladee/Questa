@@ -1599,6 +1599,39 @@ const demoNotifications: Notification[] = [
   },
 ]
 
+/**
+ * Что человек согласен получать.
+ *
+ * Хранится у профиля, а не в браузере: рассылку ведёт база, и решать, кому
+ * слать, она должна там же (миграция 016). Пустой объект означает согласие
+ * на всё — старые профили ничего не теряют.
+ *
+ * Выключить можно не всё: о начале, отмене и завершении встречи сообщается
+ * всегда, иначе человек придёт к закрытой двери.
+ */
+export type NotifyKey = 'reminder' | 'task' | 'rate' | 'chat'
+
+export async function getNotifySettings (userId: string): Promise<Record<string, boolean>> {
+  if (!isLive) return {}
+
+  const { data } = await db().from('app_user').select('notify').eq('id', userId).maybeSingle()
+  return (data?.notify ?? {}) as Record<string, boolean>
+}
+
+export async function setNotifySetting (
+  userId: string, key: NotifyKey, value: boolean,
+): Promise<Record<string, boolean>> {
+  const current = await getNotifySettings(userId)
+  const next = { ...current, [key]: value }
+
+  if (isLive) {
+    const { error } = await db().from('app_user').update({ notify: next }).eq('id', userId)
+    if (error) throw error
+  }
+
+  return next
+}
+
 /** Складывает уведомление в центр уведомлений получателям (ЧТЗ 5.16). */
 async function notify (
   userIds: string[],

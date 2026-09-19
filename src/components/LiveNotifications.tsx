@@ -3,8 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { BellIcon, FlameIcon, SparkIcon, UserIcon } from './icons'
 import { Avatar } from './ui'
 import {
-  chatImageUrl, listEvents, markNotificationRead, subscribeMessages, subscribeNotifications,
-  type Notification,
+  chatImageUrl, getNotifySettings, listEvents, markNotificationRead, subscribeMessages,
+  subscribeNotifications, type Notification,
 } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
@@ -49,6 +49,20 @@ export function LiveNotifications () {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const [shown, setShown] = useState<Banner | null>(null)
+  // Что человек согласен видеть. Уведомления из базы она отсеивает сама,
+  // а плашки о сообщениях приходят напрямую — их фильтруем здесь.
+  const [allowed, setAllowed] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    if (!profile) return
+
+    let alive = true
+    getNotifySettings(profile.id)
+      .then((saved) => { if (alive) setAllowed(saved) })
+      .catch(() => {})
+
+    return () => { alive = false }
+  }, [profile?.id])
 
   // Адрес нужен внутри подписки, а она создаётся один раз: без ссылки
   // подписка запомнила бы адрес момента создания и молчала бы невпопад.
@@ -102,6 +116,11 @@ export function LiveNotifications () {
       // показывать самому себе незачем.
       if (!message.authorId || message.authorId === profile.id) return
 
+      // Плашки о сообщениях можно выключить в настройках. Само сообщение
+      // никуда не денется — оно ждёт в чате, а счётчик на карточке
+      // встречи всё равно посчитает.
+      if (allowed.chat === false) return
+
       show({
         id: message.id,
         title: event.title,
@@ -115,7 +134,7 @@ export function LiveNotifications () {
     }))
 
     return () => stops.forEach((stop) => stop())
-  }, [profile?.id, chatIds])
+  }, [profile?.id, chatIds, allowed.chat])
 
   if (!shown) return null
 

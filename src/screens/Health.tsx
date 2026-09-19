@@ -163,6 +163,7 @@ export default function Health () {
       { key: '013_invite_card', title: '013 — карточка встречи по ссылке' },
       { key: '014_chat_unread', title: '014 — непрочитанные сообщения' },
       { key: '015_unread_people_only', title: '015 — в счётчике только сообщения людей' },
+      { key: '016_notification_settings', title: '016 — выключатели уведомлений' },
     ]
 
     try {

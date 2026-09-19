@@ -8,27 +8,42 @@ import { Loading } from '../components/States'
 import { BackIcon } from '../components/icons'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../lib/auth'
+import { getNotifySettings, setNotifySetting } from '../lib/api'
 
-// Типы уведомлений из таблицы в ЧТЗ 5.16. Выбор хранится на самом устройстве:
-// это настройка того, что показывать здесь, а не общая для всех сессий.
+/**
+ * Что можно выключить (ЧТЗ 5.16).
+ *
+ * Здесь только то, чем приложение способно надоесть. О начале встречи, её
+ * отмене и завершении сообщается всегда: без этого человек придёт к
+ * закрытой двери, и такой «настройки» быть не должно.
+ *
+ * Прежний список был длиннее и не работал вовсе: выбор лежал в памяти
+ * браузера, а рассылку ведёт база и про него не знала.
+ */
 const NOTIFICATIONS = [
-  { key: 'nearby', label: 'Новые ивенты рядом' },
-  { key: 'join', label: 'Заявки в мои ивенты' },
-  { key: 'group', label: 'Группа набрана' },
-  { key: 'chat', label: 'Сообщения в чате' },
-  { key: 'start', label: 'Напоминание о начале' },
-  { key: 'quest', label: 'Новые задания' },
+  {
+    key: 'reminder',
+    label: 'Напоминания о встрече',
+    note: 'За сутки, 12 и 6 часов, час и полчаса до начала',
+  },
+  {
+    key: 'chat',
+    label: 'Сообщения в чате',
+    note: 'Всплывающая плашка, когда пишут в чат встречи',
+  },
+  {
+    key: 'task',
+    label: 'Задания участников',
+    note: 'Когда кто-то из компании справился с заданием',
+  },
+  {
+    key: 'rate',
+    label: 'Просьба оценить',
+    note: 'Один раз через несколько часов после встречи',
+  },
 ] as const
 
 type NotificationKey = (typeof NOTIFICATIONS)[number]['key']
-
-function loadNotificationSettings (): Record<string, boolean> {
-  try {
-    return JSON.parse(localStorage.getItem('questa:notifications') ?? '{}')
-  } catch {
-    return {}
-  }
-}
 
 function Section ({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -58,7 +73,8 @@ export default function Settings () {
   const [passwordNote, setPasswordNote] = useState('')
   const [savingPassword, setSavingPassword] = useState(false)
 
-  const [notifications, setNotifications] = useState<Record<string, boolean>>(loadNotificationSettings)
+  const [notifications, setNotifications] = useState<Record<string, boolean>>({})
+  const [notifyNote, setNotifyNote] = useState('')
   const [confirmingDelete, setConfirmingDelete] = useState(0)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -88,6 +104,19 @@ export default function Settings () {
     setInterests(profile.interests)
     setAvatar(profile.avatarUrl)
   }, [profile])
+
+  // Что человек согласен получать — у профиля, а не в браузере: рассылку
+  // ведёт база, и знать об отказе должна она.
+  useEffect(() => {
+    if (!profile) return
+
+    let alive = true
+    getNotifySettings(profile.id)
+      .then((saved) => { if (alive) setNotifications(saved) })
+      .catch(() => {})
+
+    return () => { alive = false }
+  }, [profile?.id])
 
   if (!profile) return <PlainScreen title="Настройки"><Loading /></PlainScreen>
 
@@ -136,13 +165,23 @@ export default function Settings () {
     }
   }
 
-  function switchNotification (key: NotificationKey, value: boolean) {
-    const updated = { ...notifications, [key]: value }
-    setNotifications(updated)
+  /**
+   * Переключатель отвечает сразу, а запись идёт следом: ждать ответа базы
+   * ради галочки незачем. Не записалось — возвращаем как было и говорим
+   * об этом, иначе человек уйдёт с экрана в уверенности, что выключил.
+   */
+  async function switchNotification (key: NotificationKey, value: boolean) {
+    if (!profile) return
+
+    const before = notifications
+    setNotifications({ ...notifications, [key]: value })
+    setNotifyNote('')
+
     try {
-      localStorage.setItem('questa:notifications', JSON.stringify(updated))
+      setNotifications(await setNotifySetting(profile.id, key, value))
     } catch {
-      // Приватный режим браузера может запрещать запись — не повод падать.
+      setNotifications(before)
+      setNotifyNote('Настройка не сохранилась — попробуйте ещё раз')
     }
   }
 
@@ -199,9 +238,12 @@ export default function Settings () {
 
         <Section title="Уведомления">
           <div className="divide-y divide-white/10 overflow-hidden rounded-card bg-surface-2">
-            {NOTIFICATIONS.map(({ key, label }) => (
+            {NOTIFICATIONS.map(({ key, label, note }) => (
               <div key={key} className="flex items-center gap-3 p-4">
-                <span className="min-w-0 flex-1 text-[17px]">{label}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[17px]">{label}</span>
+                  <span className="block text-[14px] leading-snug text-muted">{note}</span>
+                </span>
                 <Switch
                   label={label}
                   checked={notifications[key] ?? true}
@@ -210,6 +252,11 @@ export default function Settings () {
               </div>
             ))}
           </div>
+
+          <p className="text-[14px] leading-snug text-muted">
+            {notifyNote || 'О начале, отмене и завершении встречи сообщаем всегда — '
+              + 'иначе можно прийти к закрытой двери.'}
+          </p>
         </Section>
 
         <Section title="Аккаунт">
