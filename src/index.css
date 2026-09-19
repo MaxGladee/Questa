@@ -61,6 +61,14 @@
   --radius-field: 18px;
 }
 
+/* Безопасные поля экрана — «чёлка» сверху и полоса жестов снизу.
+   Собственными именами, а не env() по месту: так их видно в одном месте,
+   а на проверке в браузере им можно подставить значения айфона. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 html, body, #root { height: 100%; }
 
 body {

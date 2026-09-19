@@ -200,7 +200,7 @@ export function MapFilters (
           )}
         </div>
 
-        <div className="p-5">
+        <div className="p-5 pb-[calc(1.25rem+var(--safe-bottom))]">
           <Button onClick={onClose} disabled={found === 0}>
             {found === 0 ? 'Ничего не подходит' : `Показать ${found}`}
           </Button>

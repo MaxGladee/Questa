@@ -76,14 +76,34 @@ export default function EventDetails () {
     () => getEvent(id!, profile?.id ?? null), [id, profile?.id],
   )
 
-  if (loading) return <PlainScreen title="Ивент"><Loading /></PlainScreen>
-  if (error) return <PlainScreen title="Ивент"><Failed message={error} onRetry={reload} /></PlainScreen>
+  // Кнопка «назад» есть и на этих трёх экранах: без неё человек, пришедший
+  // по старой ссылке на удалённую встречу, оказывался в тупике — ни
+  // возврата, ни вкладок внизу.
+  const back = <button onClick={() => navigate(-1)} aria-label="Назад"><BackIcon className="size-7" /></button>
+
+  if (loading) return <PlainScreen title="Ивент" left={back}><Loading /></PlainScreen>
+  if (error) {
+    return (
+      <PlainScreen title="Ивент" left={back}>
+        <Failed message={error} onRetry={reload} />
+      </PlainScreen>
+    )
+  }
   if (!event) {
     return (
-      <PlainScreen title="Ивент не найден">
-        <p className="px-6 py-10 text-center text-[17px] text-muted">
-          Возможно, организатор его отменил.
-        </p>
+      <PlainScreen title="Ивент не найден" left={back}>
+        <div className="space-y-5 px-6 py-10 text-center">
+          <p className="text-[17px] leading-snug text-muted">
+            Возможно, организатор его отменил или удалил. Ссылка на такую встречу
+            больше никуда не ведёт.
+          </p>
+          <Link
+            to="/"
+            className="inline-block rounded-full bg-surface-2 px-6 py-3 text-[16px] font-semibold"
+          >
+            На главную
+          </Link>
+        </div>
       </PlainScreen>
     )
   }
@@ -472,7 +492,7 @@ export default function EventDetails () {
           набивалось бы за вечер, а цифра в профиле перестала бы
           что-либо значить. Здесь об этом говорится до нажатия. */}
       {finishing && (
-        <div className="absolute inset-0 z-30 flex items-end bg-black/60 px-4 pb-6">
+        <div className="absolute inset-0 z-30 flex items-end bg-black/60 px-4 pb-[calc(1.5rem+var(--safe-bottom))]">
           <div className="w-full space-y-4 rounded-[28px] bg-surface p-6">
             <h2 className="text-center text-[22px]">Завершить сейчас?</h2>
 
@@ -509,7 +529,7 @@ export default function EventDetails () {
 
       {/* Отмена с причиной: участникам важно узнать, почему встречи не будет. */}
       {cancelling && (
-        <div className="absolute inset-0 z-30 flex items-end bg-black/60 px-4 pb-6">
+        <div className="absolute inset-0 z-30 flex items-end bg-black/60 px-4 pb-[calc(1.5rem+var(--safe-bottom))]">
           <div className="w-full space-y-4 rounded-[28px] bg-surface p-6">
             <h2 className="text-center text-[22px]">Отменить ивент?</h2>
             <p className="text-center text-[16px] leading-snug text-muted">
@@ -545,7 +565,7 @@ export default function EventDetails () {
 
       {/* Подтверждение вступления — модальное окно из ЧТЗ 5.7, шаг 3. */}
       {joining && (
-        <div className="absolute inset-0 z-30 flex items-end bg-black/60 px-4 pb-6">
+        <div className="absolute inset-0 z-30 flex items-end bg-black/60 px-4 pb-[calc(1.5rem+var(--safe-bottom))]">
           <div className="w-full space-y-4 rounded-[28px] bg-surface p-6">
             <h2 className="text-center text-[24px]">Присоединиться к ивенту?</h2>
 

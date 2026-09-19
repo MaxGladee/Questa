@@ -125,7 +125,7 @@ export function Sheet (
         </div>
 
         {multiple && (
-          <div className="p-5">
+          <div className="p-5 pb-[calc(1.25rem+var(--safe-bottom))]">
             <Button disabled={chosen.length === 0} onClick={() => onApply(chosen)}>Готово</Button>
           </div>
         )}

@@ -114,7 +114,7 @@ export default function PhotoTask (
         )}
       </div>
 
-      <div className="shrink-0 space-y-3 p-5">
+      <div className="shrink-0 space-y-3 p-5 pb-[calc(1.25rem+var(--safe-bottom))]">
         {error && <p className="text-center text-[15px] text-red-400">{error}</p>}
 
         {stage === 'ask' && (

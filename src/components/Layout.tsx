@@ -12,23 +12,43 @@ const TABS = [
   { to: '/profile', label: 'Профиль', Icon: UserIcon },
 ]
 
+/**
+ * Нижняя навигация.
+ *
+ * Панель висит не в пустоте: под ней до самого края экрана идёт фон, а
+ * выше он растворяется. На айфоне, где приложение открыто с домашнего
+ * экрана, иначе выходило некрасиво — между панелью и краем оставалась
+ * полоса чужого фона, а сквозь неё виднелся обрезанный список. Полоса
+ * жестов iOS при этом остаётся свободной: панель поднята ровно на её
+ * высоту, а не налезает сверху.
+ */
 function BottomNav () {
   return (
-    <nav className="pointer-events-auto absolute inset-x-3 bottom-3 z-20 flex items-center
-                    justify-between rounded-full border border-white/10 bg-surface/95 p-1.5
-                    backdrop-blur">
-      {TABS.map(({ to, label, Icon }) => (
-        <NavLink
-          key={to} to={to} end={to === '/'}
-          className={({ isActive }) =>
-            `flex flex-1 flex-col items-center gap-1 rounded-full py-2.5 text-[11px] transition
-             ${isActive ? 'bg-accent-2 text-white' : 'text-white/80'}`}
-        >
-          <Icon className="size-6" />
-          {label}
-        </NavLink>
-      ))}
-    </nav>
+    <div
+      className="pointer-events-none absolute inset-x-0 z-20 bg-gradient-to-t from-bg
+                 from-55% via-bg/75 via-80% to-transparent pt-14"
+      style={{
+        // Обёртка спускается ниже безопасного поля рамки — до самого низа
+        // экрана, — а панель внутри поднята на его высоту.
+        bottom: 'calc(-1 * var(--safe-bottom))',
+        paddingBottom: 'calc(var(--safe-bottom) + 12px)',
+      }}
+    >
+      <nav className="pointer-events-auto mx-3 flex items-center justify-between rounded-full
+                      border border-white/10 bg-surface/95 p-1.5 backdrop-blur">
+        {TABS.map(({ to, label, Icon }) => (
+          <NavLink
+            key={to} to={to} end={to === '/'}
+            className={({ isActive }) =>
+              `flex flex-1 flex-col items-center gap-1 rounded-full py-2.5 text-[11px] transition
+               ${isActive ? 'bg-accent-2 text-white' : 'text-white/80'}`}
+          >
+            <Icon className="size-6" />
+            {label}
+          </NavLink>
+        ))}
+      </nav>
+    </div>
   )
 }
 
@@ -60,8 +80,8 @@ export function PhoneFrame ({ children }: { children: ReactNode }) {
       className="relative mx-auto flex h-full w-full max-w-[420px] flex-col bg-bg
                  shadow-[0_0_80px_-20px_rgb(135_105_255/0.35)]"
       style={{
-        paddingTop: 'env(safe-area-inset-top)',
-        paddingBottom: 'env(safe-area-inset-bottom)',
+        paddingTop: 'var(--safe-top)',
+        paddingBottom: 'var(--safe-bottom)',
       }}
     >
       <OfflineBar />
@@ -95,7 +115,9 @@ export function TabScreen (
   const { pathname } = useLocation()
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden">
+    // Без overflow-hidden: обёртка навигации намеренно выходит за нижний
+    // край экрана, в безопасное поле рамки, и обрезать её нельзя.
+    <div className="relative flex h-full flex-col">
       <div
         key={pathname}
         className={fullBleed

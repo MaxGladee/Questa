@@ -190,7 +190,7 @@ export default function GeoTask (
 
       <div ref={container} className="mx-5 min-h-0 flex-1 overflow-hidden rounded-card bg-surface" />
 
-      <div className="flex shrink-0 flex-col gap-4 p-5">
+      <div className="flex shrink-0 flex-col gap-4 p-5 pb-[calc(1.25rem+var(--safe-bottom))]">
         {error || !watching ? (
           <div className="space-y-3 rounded-card bg-surface-2 p-4">
             <p className="text-[16px] leading-snug text-muted">

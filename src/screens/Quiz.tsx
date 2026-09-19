@@ -87,7 +87,7 @@ export default function Quiz (
   const right = answered && picked === question?.correctIndex
 
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-bg px-5 pb-8 pt-4">
+    <div className="absolute inset-0 z-30 flex flex-col bg-bg px-5 pb-[calc(2rem+var(--safe-bottom))] pt-4">
       <header className="flex items-center justify-between">
         <h2 className="text-[22px]">{task.title}</h2>
         <button onClick={onClose} aria-label="Закрыть"><CloseIcon className="size-7" /></button>

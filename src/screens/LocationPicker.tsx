@@ -264,7 +264,7 @@ export default function LocationPicker (
         })}
       </div>
 
-      <div className="shrink-0 space-y-3 p-5">
+      <div className="shrink-0 space-y-3 p-5 pb-[calc(1.25rem+var(--safe-bottom))]">
         <Field
           placeholder={lookingUp ? 'Определяем адрес…' : 'Адрес'}
           value={address} onChange={(e) => setAddress(e.target.value)}

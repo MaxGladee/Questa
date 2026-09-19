@@ -99,7 +99,7 @@ export function ReportSheet (
           {error && <p className="text-[15px] text-red-400">{error}</p>}
         </div>
 
-        <div className="space-y-2 p-5">
+        <div className="space-y-2 p-5 pb-[calc(1.25rem+var(--safe-bottom))]">
           <Button disabled={!reason || sending} onClick={send}>
             {sending ? 'Отправляем…' : 'Отправить жалобу'}
           </Button>

@@ -255,8 +255,7 @@ export default function Settings () {
           </div>
 
           <p className="text-[14px] leading-snug text-muted">
-            {notifyNote || 'О начале, отмене и завершении встречи сообщаем всегда — '
-              + 'иначе можно прийти к закрытой двери.'}
+            {notifyNote || 'О начале, отмене и завершении встречи сообщаем всегда.'}
           </p>
         </Section>
 
