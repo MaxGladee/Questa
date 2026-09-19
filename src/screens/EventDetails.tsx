@@ -9,8 +9,9 @@ import {
 import { Cover } from '../components/Art'
 import { categoryTitle, formatDate, formatTime } from '../data/demo'
 import {
-  AUTO_FINISH_HOURS, MIN_EVENT_MINUTES, autoFinishAt, cancelEvent, fileComplaint,
-  finishEvent, getEvent, joinEvent, leaveEvent, openChat, startEvent, willCount,
+  AUTO_FINISH_HOURS, MIN_CHECKED_IN_TO_START, MIN_EVENT_MINUTES, REQUIRE_CHECK_INS_TO_START,
+  autoFinishAt, cancelEvent, fileComplaint, finishEvent, getEvent, joinEvent, leaveEvent,
+  openChat, startEvent, willCount,
 } from '../lib/api'
 import { ReportSheet } from '../components/ReportSheet'
 import { Lightbox } from '../components/Lightbox'
@@ -92,6 +93,7 @@ export default function EventDetails () {
     && new Date(event.startsAt).getTime() > Date.now()
   const editTo = `/event/${event.id}/edit`
 
+  const present = event.participants.filter((person) => person.checkedIn).length
   const organizer = event.participants.find((person) => person.role === 'organizer')
   const full = event.participants.length >= event.maxParticipants
   const started = new Date(event.startsAt).getTime() <= Date.now()
@@ -317,9 +319,30 @@ export default function EventDetails () {
               </Button>
             )}
 
-            {/* Пока организатор не начал встречу, заданий нет ни у кого. */}
+            {/* Пока организатор не начал встречу, заданий нет ни у кого.
+                Рядом — сколько человек уже отметилось: квест затевают для
+                собравшейся компании, а не для одного пришедшего. Пока это
+                подсказка, а не запрет (см. REQUIRE_CHECK_INS_TO_START). */}
             {event.myRole === 'organizer' && event.status === 'active' && (
-              <Button disabled={busy} onClick={start}>
+              <p className={`text-center text-[15px] leading-snug ${
+                present >= MIN_CHECKED_IN_TO_START ? 'text-success' : 'text-muted'}`}
+              >
+                {present >= MIN_CHECKED_IN_TO_START
+                  ? `На месте отметились ${present} — можно начинать`
+                  : present === 0
+                    ? 'Пока никто не отметился на месте. Задания стоит открывать, '
+                      + 'когда компания собралась'
+                    : `На месте отметился ${present} человек. Обычно начинают, `
+                      + `когда собрались хотя бы ${MIN_CHECKED_IN_TO_START}`}
+              </p>
+            )}
+
+            {event.myRole === 'organizer' && event.status === 'active' && (
+              <Button
+                disabled={busy
+                  || (REQUIRE_CHECK_INS_TO_START && present < MIN_CHECKED_IN_TO_START)}
+                onClick={start}
+              >
                 {/* Ожидание честное: в этот момент модель придумывает
                     задания под собравшуюся компанию, это занимает секунды. */}
                 {busy ? 'Придумываем задания…' : 'Начать ивент'}

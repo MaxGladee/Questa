@@ -177,6 +177,11 @@ export default function Chat () {
     }
   }
 
+  // Список участников для полоски присутствия: организатор идёт первым,
+  // как и в карточке встречи.
+  const arriving = event?.participants ?? []
+  const present = arriving.filter((person) => person.checkedIn).length
+
   const reportSheet = reported && profile && (
     <ReportSheet
       title="Пожаловаться"
@@ -228,6 +233,33 @@ export default function Chat () {
           <span className="size-2.5 rounded-full bg-success" />
           В процессе
         </p>
+      )}
+
+      {/*
+        Кто уже на месте.
+        
+        Во время сбора смотрят именно в чат — «я подхожу», «я в пробке», —
+        а отметки о присутствии лежали в карточке встречи, куда в этот
+        момент никто не заходит. Здесь они рядом с перепиской: зелёный
+        ободок у тех, кто отметился, приглушённый — у остальных.
+      */}
+      {arriving.length > 0 && (
+        <div className="flex items-center gap-2 px-4 pb-3">
+          <span className="text-[14px] text-muted">
+            На месте {present} из {arriving.length}
+          </span>
+          <span className="flex items-center">
+            {arriving.slice(0, 6).map((person, index) => (
+              <span
+                key={person.id}
+                className={`${index > 0 ? '-ml-2' : ''} rounded-full ${
+                  person.checkedIn ? 'ring-2 ring-success' : 'opacity-45 ring-2 ring-surface'}`}
+              >
+                <Avatar name={person.nickname} src={person.avatarUrl} size={26} />
+              </span>
+            ))}
+          </span>
+        </div>
       )}
 
       <div className="no-scrollbar flex-1 overflow-y-auto px-4 pb-2">
