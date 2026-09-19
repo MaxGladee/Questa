@@ -9,6 +9,7 @@ import { BackIcon } from '../components/icons'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../lib/auth'
 import { getNotifySettings, setNotifySetting } from '../lib/api'
+import { InstallCard } from '../components/InstallApp'
 
 /**
  * Что можно выключить (ЧТЗ 5.16).
@@ -258,6 +259,11 @@ export default function Settings () {
               + 'иначе можно прийти к закрытой двери.'}
           </p>
         </Section>
+
+        {/* Установка стоит перед «Аккаунтом»: это про само приложение, а
+            не про человека. Карточка сама исчезает, когда ставить некуда —
+            Questa уже на домашнем экране или браузер так не умеет. */}
+        <InstallCard />
 
         <Section title="Аккаунт">
           <Button variant="ghost" onClick={() => signOut().then(() => navigate('/start'))}>

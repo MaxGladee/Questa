@@ -204,3 +204,10 @@ export const ShareIcon = ({ className }: IconProps) => (
     <path d="M6.5 11H5v9.5h14V11h-1.5" />
   </svg>
 )
+
+export const PhoneIcon = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" className={className} {...stroke}>
+    <rect x="6" y="2.5" width="12" height="19" rx="3" />
+    <path d="M10.5 18.5h3" />
+  </svg>
+)

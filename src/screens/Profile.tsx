@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { TabScreen } from '../components/Layout'
 import { Avatar, Progress } from '../components/ui'
 import { Loading } from '../components/States'
-import { CalendarIcon, ChevronIcon, GearIcon, ShareIcon } from '../components/icons'
+import { CalendarIcon, ChevronIcon, GearIcon, ShareIcon, StarIcon } from '../components/icons'
 
 import { levelFromExp, levelProgress } from '../data/demo'
 import { listEvents } from '../lib/api'
@@ -92,6 +92,16 @@ export default function Profile () {
 
           <h1 className="mt-5 text-[27px]">{profile.nickname}</h1>
           <p className="text-[18px] text-white/80">{profile.city}</p>
+
+          {/* Свою оценку человек видел только чужими глазами — открыв
+              собственный профиль из списка участников. Оценки ставят друг
+              другу после встречи, и знать свою полезнее, чем неловко. */}
+          <p className="mt-2 flex items-center gap-1.5 text-[16px]">
+            <StarIcon className="size-5 text-warning" />
+            {profile.averageRating > 0
+              ? `${profile.averageRating.toFixed(1)} по оценкам участников`
+              : 'пока без оценок'}
+          </p>
         </header>
 
         <section className="space-y-3">

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { TabScreen } from '../components/Layout'
 import { EventListCard } from '../components/EventCard'
 import { FirstSteps } from '../components/FirstSteps'
+import { InstallBanner } from '../components/InstallApp'
 import {
   MapFilters, NO_FILTERS, activeFilterCount, matchesFilters, type MapFilterState,
 } from '../components/MapFilters'
@@ -262,6 +263,10 @@ export default function Home () {
           interests={profile?.interests.length ?? 0}
           hasEvent={(events ?? []).some((event) => event.myRole !== 'guest')}
         />
+
+        {/* Одно предложение поставить Questa на домашний экран. Показывается
+            только там, где браузер это умеет, и только до первого ответа. */}
+        <InstallBanner />
 
         {active && (
           <Link to={`/event/${active.id}/quest`} className="block rounded-card bg-surface p-3.5">

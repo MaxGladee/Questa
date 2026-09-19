@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import './lib/install'
 
 // Оболочка приложения кладётся в кэш, чтобы Questa открывалась и без сети
 // (см. public/sw.js). Сбой регистрации не должен ломать запуск: без
