@@ -6,7 +6,11 @@
     <meta name="theme-color" content="#0F082C" />
     <meta name="description" content="Questa — микро-ивенты рядом: собрать компанию и превратить встречу в квест" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- Не black-translucent: в этом режиме приложение рисуется во весь экран,
+         но высота окна приходит на статус-бар меньше — и внизу оставалась
+         полоса чужого фона, до которой странице не дотянуться. С black окно
+         начинается под статус-баром и совпадает с видимой областью. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="apple-mobile-web-app-title" content="Questa" />
     <link rel="icon" type="image/png" href="./icon-192.png" />
     <link rel="apple-touch-icon" href="./icon-192.png" />
