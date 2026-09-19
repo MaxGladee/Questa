@@ -1241,6 +1241,59 @@ export async function getInviteCard (eventId: string): Promise<InviteCard | null
   }
 }
 
+/** Снимок из фото-задания: кто снял и для какого задания. */
+export interface EventPhoto {
+  url: string
+  nickname: string
+  task: string
+}
+
+/**
+ * Снимки встречи.
+ *
+ * Фотографии из заданий лежат в хранилище и до сих пор нигде не
+ * показывались: человек снимал вывеску или компанию за столом, получал
+ * очки — и снимок исчезал. А это единственное, что от встречи остаётся,
+ * кроме цифр; на итогах ему самое место.
+ */
+export async function listEventPhotos (eventId: string): Promise<EventPhoto[]> {
+  if (!isLive) {
+    // В демонстрационном режиме снимков нет — показываем обложки как
+    // заглушку, иначе раздел итогов выглядит пустым там, где он и
+    // задуман самым живым.
+    const art = (name: string) => `${import.meta.env.BASE_URL}art/${name}`
+    return eventId === 'karaoke'
+      ? [
+          { url: art('cover-karaoke.jpg'), nickname: 'Катя', task: 'Поймать кадр' },
+          { url: art('cover-dnd.jpg'), nickname: 'Алексей', task: 'Поймать кадр' },
+        ]
+      : []
+  }
+
+  const client = db()
+
+  const { data: quest } = await client
+    .from('quest').select('task (id, title)').eq('event_id', eventId).maybeSingle()
+
+  const tasks = (quest?.task ?? []) as Row[]
+  if (tasks.length === 0) return []
+
+  const { data } = await client
+    .from('task_completion')
+    .select('photo_url, task_id, completed_at, app_user (nickname)')
+    .in('task_id', tasks.map((task) => task.id))
+    .not('photo_url', 'is', null)
+    .order('completed_at')
+
+  const titles = new Map(tasks.map((task) => [task.id, task.title as string]))
+
+  return (data ?? []).map((row: Row) => ({
+    url: row.photo_url as string,
+    nickname: row.app_user?.nickname ?? 'Участник',
+    task: titles.get(row.task_id) ?? 'Задание',
+  }))
+}
+
 // ─────────────────── итоги ивента и взаимные оценки ───────────────────
 
 /** Оценки, которые текущий пользователь уже поставил на этом ивенте. */

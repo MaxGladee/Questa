@@ -5,7 +5,8 @@ import { Avatar, Button, Field } from '../components/ui'
 import { Failed, Loading } from '../components/States'
 import { BackIcon, StarIcon } from '../components/icons'
 import { useToast } from '../components/Toast'
-import { getEvent, getQuest, listMyRatings, rateUser } from '../lib/api'
+import { getEvent, getQuest, listEventPhotos, listMyRatings, rateUser } from '../lib/api'
+import { Lightbox } from '../components/Lightbox'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../lib/auth'
 
@@ -56,11 +57,16 @@ export default function Summary () {
   )
   const { data: quest } = useAsync(() => getQuest(id!, profile?.id ?? null), [id, profile?.id])
 
+  // Снимки из фото-заданий: единственное, что остаётся от встречи, кроме
+  // цифр. До сих пор они лежали в хранилище и нигде не показывались.
+  const { data: photos } = useAsync(() => listEventPhotos(id!), [id])
+
   // given — то, что уже отправлено и больше не меняется; draft — выбор,
   // который человек ещё перебирает.
   const [given, setGiven] = useState<Record<string, number>>({})
   const [draft, setDraft] = useState<Record<string, number>>({})
   const [comment, setComment] = useState('')
+  const [zoomed, setZoomed] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -159,6 +165,29 @@ export default function Summary () {
           </p>
         </section>
 
+        {(photos?.length ?? 0) > 0 && (
+          <section className="space-y-3">
+            <h2 className="text-[20px]">Снимки встречи</h2>
+            <div className="no-scrollbar -mx-5 flex gap-3 overflow-x-auto px-5 pb-1">
+              {photos!.map((photo, index) => (
+                <button
+                  key={`${photo.url}-${index}`} onClick={() => setZoomed(photo.url)}
+                  aria-label={`Снимок: ${photo.task}`}
+                  className="w-[132px] shrink-0 space-y-1.5 text-left"
+                >
+                  <img
+                    src={photo.url} alt={photo.task}
+                    className="h-[132px] w-full rounded-card object-cover"
+                  />
+                  <span className="block truncate text-[13px] text-muted">
+                    {photo.nickname} · {photo.task}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section className="space-y-3">
           <h2 className="text-[20px]">Кто сколько набрал</h2>
           {table.map((person, index) => (
@@ -248,6 +277,8 @@ export default function Summary () {
           </Link>
         )}
       </div>
+
+      {zoomed && <Lightbox src={zoomed} alt="Снимок встречи" onClose={() => setZoomed(null)} />}
     </PlainScreen>
   )
 }
