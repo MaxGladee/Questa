@@ -6,10 +6,10 @@ import { HomeIcon, FlameIcon, MapIcon, UserIcon } from './icons'
 // Магазин из макетов в прототип не вошёл: по ЧТЗ 3.2 он отнесён к третьему
 // этапу, за пределы MVP. Осталось четыре вкладки.
 const TABS = [
-  { to: '/',        label: 'Главная', Icon: HomeIcon },
-  { to: '/events',  label: 'Ивенты',  Icon: FlameIcon },
-  { to: '/map',     label: 'Карта',   Icon: MapIcon },
-  { to: '/profile', label: 'Профиль', Icon: UserIcon },
+  { to: '/',        label: 'Главная', Icon: HomeIcon,  tour: 'tab-home' },
+  { to: '/events',  label: 'Ивенты',  Icon: FlameIcon, tour: 'tab-events' },
+  { to: '/map',     label: 'Карта',   Icon: MapIcon,   tour: 'tab-map' },
+  { to: '/profile', label: 'Профиль', Icon: UserIcon,  tour: 'tab-profile' },
 ]
 
 /**
@@ -36,9 +36,9 @@ function BottomNav () {
     >
       <nav className="pointer-events-auto mx-3 flex items-center justify-between rounded-full
                       border border-white/10 bg-surface/95 p-1 backdrop-blur">
-        {TABS.map(({ to, label, Icon }) => (
+        {TABS.map(({ to, label, Icon, tour }) => (
           <NavLink
-            key={to} to={to} end={to === '/'}
+            key={to} to={to} end={to === '/'} data-tour={tour}
             className={({ isActive }) =>
               `flex flex-1 flex-col items-center gap-0.5 rounded-full py-2 text-[11px] transition
                ${isActive ? 'bg-accent-2 text-white' : 'text-white/80'}`}

@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { TabScreen } from '../components/Layout'
 import { EventListCard } from '../components/EventCard'
-import { FirstSteps } from '../components/FirstSteps'
 import { InstallBanner } from '../components/InstallApp'
+import { Tour, tourSeen } from '../components/Tour'
 import {
   MapFilters, NO_FILTERS, activeFilterCount, matchesFilters, type MapFilterState,
 } from '../components/MapFilters'
@@ -121,11 +121,23 @@ export default function Home () {
   const [calendarOpen, setCalendarOpen] = useState(true)
   const [filters, setFilters] = useState<MapFilterState>(NO_FILTERS)
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [tour, setTour] = useState(false)
   const guard = useAutofillGuard()
 
   const { data: events, error, loading, reload } = useAsync(
     () => listEvents(profile?.id ?? null, profile?.city), [profile?.id, profile?.city],
   )
+
+  /*
+   * Обучение показывается один раз и только когда экран уже собрался:
+   * подсвечивать место, которое через мгновение съедет вниз, — хуже, чем
+   * не подсказывать вовсе. Полсекунды нужны, чтобы улеглись карточки.
+   */
+  useEffect(() => {
+    if (loading || !profile || tourSeen()) return
+    const timer = setTimeout(() => setTour(true), 500)
+    return () => clearTimeout(timer)
+  }, [loading, profile?.id])
 
   const { data: unread } = useAsync(
     () => profile ? countUnread(profile.id) : Promise.resolve(0), [profile?.id],
@@ -239,7 +251,10 @@ export default function Home () {
             />
           </Link>
 
-          <label className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl bg-surface px-3.5 py-3">
+          <label
+            data-tour="search"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl bg-surface px-3.5 py-3"
+          >
             <SearchIcon className="size-5 text-muted" />
             <input
               {...guard} type="search" name="event-search"
@@ -264,16 +279,11 @@ export default function Home () {
           </Link>
         </header>
 
-        {/* Пока у человека нет ни одной своей встречи, главная объясняет,
-            что делать. Дальше исчезает. */}
-        <FirstSteps
-          interests={profile?.interests.length ?? 0}
-          hasEvent={(events ?? []).some((event) => event.myRole !== 'guest')}
-        />
-
         {/* Одно предложение поставить Questa на домашний экран. Показывается
             только там, где браузер это умеет, и только до первого ответа. */}
         <InstallBanner />
+
+        {tour && <Tour onClose={() => setTour(false)} />}
 
         {active && (
           <Link to={`/event/${active.id}/quest`} className="block rounded-card bg-surface p-3.5">
@@ -338,7 +348,7 @@ export default function Home () {
           </section>
         )}
 
-        <section className="space-y-3">
+        <section data-tour="feed" className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-[24px]">Рекомендации</h2>
             {!calendarOpen && (
@@ -395,7 +405,7 @@ export default function Home () {
         )}
 
         {/* Когда рядом пусто, список идей полезнее пустого места. */}
-        <section className="space-y-3 pb-2">
+        <section data-tour="ideas" className="space-y-3 pb-2">
           <h2 className="text-[24px]">Идеи для встречи</h2>
           <p className="-mt-1 text-[15px] leading-snug text-muted">
             Подборка меняется в течение дня. Нажмите — и форма создания заполнится сама.

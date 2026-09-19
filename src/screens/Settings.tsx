@@ -10,6 +10,7 @@ import { useToast } from '../components/Toast'
 import { useAuth } from '../lib/auth'
 import { getNotifySettings, setNotifySetting } from '../lib/api'
 import { InstallCard } from '../components/InstallApp'
+import { forgetTour } from '../components/Tour'
 
 /**
  * Что можно выключить (ЧТЗ 5.16).
@@ -258,6 +259,20 @@ export default function Settings () {
             {notifyNote || 'О начале, отмене и завершении встречи сообщаем всегда.'}
           </p>
         </Section>
+
+        {/* Обход по главной показывается один раз. Сюда за ним приходят
+            те, кто пролистал его не глядя, — и те, кому нужно показать
+            приложение кому-то ещё. */}
+        <Button
+          variant="ghost"
+          onClick={() => {
+            forgetTour()
+            toast('Подсказки появятся на главной')
+            navigate('/')
+          }}
+        >
+          Показать подсказки заново
+        </Button>
 
         {/* Установка стоит перед «Аккаунтом»: это про само приложение, а
             не про человека. Карточка сама исчезает, когда ставить некуда —
