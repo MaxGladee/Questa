@@ -6,7 +6,7 @@ import { fallbackQuest } from '../data/fallback-quest'
 import { nearbyPlaces, type NearbyPlace } from './places'
 import { describePoint, findPlaces } from './geocoder'
 import {
-  EVENTS, MESSAGES, CATEGORIES,
+  DEMO_DONE_BY, EVENTS, MESSAGES, CATEGORIES,
   type CategoryCode, type ChatMessage, type Participant, type Quest, type QuestTask,
   type QuestaEvent, type TaskType,
 } from '../data/demo'
@@ -1383,6 +1383,8 @@ export interface QuestState {
   quest: Quest | null
   /** Сколько QP заработал каждый участник — для таблицы лидеров. */
   earned: Record<string, number>
+  /** Кто уже справился с каждым заданием: задание → список участников. */
+  doneBy: Record<string, string[]>
 }
 
 export async function getQuest (eventId: string, viewerId: string | null): Promise<QuestState> {
@@ -1408,7 +1410,7 @@ export async function getQuest (eventId: string, viewerId: string | null): Promi
       earned[viewerId ?? 'me'] = [...demoCompleted.values()].reduce((sum, qp) => sum + qp, 0)
     }
 
-    return { quest, earned }
+    return { quest, earned, doneBy: quest ? DEMO_DONE_BY : {} }
   }
 
   const client = db()
@@ -1416,15 +1418,20 @@ export async function getQuest (eventId: string, viewerId: string | null): Promi
   const { data: quest } = await client
     .from('quest').select('id, source, task (*)').eq('event_id', eventId).maybeSingle()
 
-  if (!quest) return { quest: null, earned: {} }
+  if (!quest) return { quest: null, earned: {}, doneBy: {} }
 
   const taskIds = (quest.task ?? []).map((task: Row) => task.id)
   const { data: completions } = await client
     .from('task_completion').select('task_id, user_id, qp_awarded').in('task_id', taskIds)
 
   const earned: Record<string, number> = {}
+  // Кто справился с каждым заданием: по этому в списке заданий видно, что
+  // компания не стоит на месте, пока сам возишься со своим.
+  const doneBy: Record<string, string[]> = {}
+
   for (const row of completions ?? []) {
     earned[row.user_id] = (earned[row.user_id] ?? 0) + row.qp_awarded
+    ;(doneBy[row.task_id] ??= []).push(row.user_id)
   }
 
   const mine = new Map(
@@ -1456,6 +1463,7 @@ export async function getQuest (eventId: string, viewerId: string | null): Promi
   return {
     quest: { title: 'Квест ивента', source: quest.source, tasks },
     earned,
+    doneBy,
   }
 }
 

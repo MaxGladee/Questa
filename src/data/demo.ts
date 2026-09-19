@@ -238,6 +238,17 @@ function inDays (days: number, hour: number): string {
   return date.toISOString()
 }
 
+/**
+ * Кто из компании уже выполнил задания — в демонстрационном режиме.
+ *
+ * Без этого экран квеста в демо выглядит так, будто человек проходит его
+ * один: аватары «справились» появляются только у живых данных.
+ */
+export const DEMO_DONE_BY: Record<string, string[]> = {
+  k1: ['u2', 'u3'],
+  k3: ['u3'],
+}
+
 const karaokeQuest: Quest = {
   title: 'Караоке-разогрев',
   source: 'ai',

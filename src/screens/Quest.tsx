@@ -99,6 +99,14 @@ export default function Quest () {
   const checkedIn = presence === 'done'
     || (event?.participants.find((person) => person.id === myId)?.checkedIn ?? false)
 
+  /** Кто ещё выполнил это задание — кроме меня: свой значок и так виден. */
+  const others = (taskId: string) => (state.doneBy[taskId] ?? [])
+    .filter((personId) => personId !== myId)
+    .flatMap((personId) => {
+      const person = event?.participants.find((item) => item.id === personId)
+      return person ? [person] : []
+    })
+
   const board = (event?.participants ?? [])
     .map((person) => ({ ...person, qpEarned: state.earned[person.id] ?? 0 }))
     .sort((a, b) => b.qpEarned - a.qpEarned)
@@ -286,6 +294,30 @@ export default function Quest () {
                   <p className="line-clamp-2 text-[16px] leading-snug text-white/85">
                     {task.description}
                   </p>
+
+                  {/* Кто из компании уже справился. Строкой в самом
+                      задании, а не отдельной лентой событий: экран квеста
+                      и так плотный, а знать полезно — видно, что все
+                      заняты тем же, и не один ты возишься. */}
+                  {others(task.id).length > 0 && (
+                    <span className="mt-2 flex items-center gap-2">
+                      <span className="flex items-center">
+                        {others(task.id).slice(0, 3).map((person, index) => (
+                          <span key={person.id} className={index > 0 ? '-ml-2' : ''}>
+                            <Avatar
+                              name={person.nickname} src={person.avatarUrl} size={22}
+                              className="ring-2 ring-black/20"
+                            />
+                          </span>
+                        ))}
+                      </span>
+                      <span className="text-[13px] text-white/70">
+                        {others(task.id).length === 1
+                          ? `${others(task.id)[0].nickname} уже справился`
+                          : `справились: ${others(task.id).length}`}
+                      </span>
+                    </span>
+                  )}
                 </div>
                 <div className="shrink-0 text-right">
                   {/*
